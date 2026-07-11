@@ -1,4 +1,0 @@
-STEPscope CAD Editor — first editable release
-
-Exact STEP/STP editing: transforms, primitives, sketch extrusion/cut, Boolean operations, cylindrical holes, all-edge fillet/chamfer, undo/redo, local STEP export and browser storage.
-Inspection: measurements, body properties, bounding box, and X/Y/Z section view (Schnittansicht).
