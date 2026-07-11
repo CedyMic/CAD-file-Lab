@@ -1,121 +1,202 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useRef, useState } from 'react'
 import './App.css'
+import { CadViewport } from './viewer/CadViewport'
+
+type WorkspaceTool =
+  | 'view'
+  | 'measure'
+  | 'section'
+  | 'modify'
+  | 'export'
+
+const tools: Array<{
+  id: WorkspaceTool
+  label: string
+  description: string
+}> = [
+  {
+    id: 'view',
+    label: 'View',
+    description: 'Orbit, pan, zoom and inspect the model',
+  },
+  {
+    id: 'measure',
+    label: 'Measure',
+    description: 'Measure vertices, edges, faces and angles',
+  },
+  {
+    id: 'section',
+    label: 'Section',
+    description: 'Preview or permanently cut the model',
+  },
+  {
+    id: 'modify',
+    label: 'Modify',
+    description: 'Fillet, chamfer and edit selected geometry',
+  },
+  {
+    id: 'export',
+    label: 'Export',
+    description: 'Save the project or export a CAD file',
+  },
+]
 
 function App() {
-  const [count, setCount] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [activeTool, setActiveTool] =
+    useState<WorkspaceTool>('view')
+
+  const [fileName, setFileName] = useState<string | null>(null)
+
+  function openFilePicker() {
+    fileInputRef.current?.click()
+  }
+
+  function handleFile(file: File | undefined) {
+    if (!file) {
+      return
+    }
+
+    setFileName(file.name)
+  }
+
+  const selectedTool =
+    tools.find((tool) => tool.id === activeTool) ?? tools[0]
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <main className="app-shell">
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark">C</span>
+
+          <div>
+            <strong>CAD File Labs</strong>
+            <span>Local-first CAD workspace</span>
+          </div>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
+
+        <div className="topbar-actions">
+          <span className="privacy-badge">
+            Files stay on this device
+          </span>
+
+          <button
+            className="primary-button"
+            type="button"
+            onClick={openFilePicker}
+          >
+            Open CAD file
+          </button>
+
+          <input
+            ref={fileInputRef}
+            hidden
+            type="file"
+            accept=".step,.stp,.iges,.igs,.brep,.stl,.obj,.ply,.3mf,.gltf,.glb"
+            onChange={(event) => {
+              handleFile(event.target.files?.[0])
+              event.target.value = ''
+            }}
+          />
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
+      </header>
+
+      <section className="workspace">
+        <aside className="sidebar">
+          <div className="sidebar-heading">
+            <p>Workspace</p>
+
+            <h1>
+              View, measure and modify 3D CAD files online
+            </h1>
+          </div>
+
+          <nav
+            className="tool-navigation"
+            aria-label="CAD workspace tools"
+          >
+            {tools.map((tool) => (
+              <button
+                key={tool.id}
+                className={
+                  activeTool === tool.id
+                    ? 'tool-button active'
+                    : 'tool-button'
+                }
+                type="button"
+                onClick={() => setActiveTool(tool.id)}
+              >
+                <strong>{tool.label}</strong>
+                <span>{tool.description}</span>
+              </button>
+            ))}
+          </nav>
+
+          <section className="project-panel">
+            <div>
+              <span className="panel-label">
+                Current project
+              </span>
+
+              <strong>
+                {fileName ?? 'No file opened'}
+              </strong>
+            </div>
+
+            <span className="autosave-status">
+              Recovery autosave will appear here
+            </span>
+          </section>
+        </aside>
+
+        <section className="viewer-panel">
+          <div className="viewer-toolbar">
+            <div>
+              <strong>{selectedTool.label}</strong>
+              <span>{selectedTool.description}</span>
+            </div>
+
+            <div className="viewer-actions">
+              <button type="button" disabled>
+                Undo
+              </button>
+
+              <button type="button" disabled>
+                Redo
+              </button>
+            </div>
+          </div>
+
+          <div
+            className="viewport-placeholder"
+            onDragOver={(event) => {
+              event.preventDefault()
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              handleFile(event.dataTransfer.files?.[0])
+            }}
+          >
+            <CadViewport />
+
+            <div className="viewer-hint">
+              <strong>{fileName ?? 'Test model'}</strong>
+
+              <span>
+                Drag to orbit · Scroll to zoom · Right-drag to pan
+              </span>
+            </div>
+          </div>
+
+          <footer className="statusbar">
+            <span>Ready</span>
+            <span>Local processing</span>
+            <span>No cloud upload</span>
+          </footer>
+        </section>
       </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    </main>
   )
 }
 
