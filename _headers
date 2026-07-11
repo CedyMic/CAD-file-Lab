@@ -1,0 +1,24 @@
+/vendor/replicad_single.wasm
+  Content-Type: application/wasm
+  Cache-Control: public, max-age=604800
+
+/vendor/occt-import-js.wasm
+  Content-Type: application/wasm
+  Cache-Control: public, max-age=604800
+
+/vendor/libs/draco/gltf/draco_decoder.wasm
+  Content-Type: application/wasm
+  Cache-Control: public, max-age=604800
+
+/vendor/*
+  Cache-Control: public, max-age=604800
+
+/*.js
+  Cache-Control: public, max-age=3600
+
+/*.css
+  Cache-Control: public, max-age=3600
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
