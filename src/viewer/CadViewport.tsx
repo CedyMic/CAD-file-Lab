@@ -5,95 +5,672 @@ import {
   Grid,
   OrbitControls,
 } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
+import {
+  Canvas,
+  useThree,
+} from '@react-three/fiber'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react'
+import type {
+  OrbitControls as OrbitControlsInstance,
+} from 'three-stdlib'
+import * as THREE from 'three'
 
-function TestModel() {
+import type {
+  ImportedCadBody,
+} from '../cad/cadClient'
+
+import {
+  defaultDisplaySettings,
+  type DisplaySettings,
+} from './DisplayPanel'
+
+export type ViewCommandType =
+  | 'fit'
+  | 'isometric'
+
+export interface ViewCommand {
+  id: number
+  type: ViewCommandType
+}
+
+interface CadViewportProps {
+  model: ImportedCadBody | null
+  settings?: DisplaySettings
+  viewCommand?: ViewCommand | null
+}
+
+interface ViewMetrics {
+  target: [number, number, number]
+  radius: number
+}
+
+function convertZUpToYUp(
+  source: number[] | Float32Array,
+): Float32Array {
+  const input = Float32Array.from(source)
+  const output = new Float32Array(input.length)
+
+  for (
+    let index = 0;
+    index < input.length;
+    index += 3
+  ) {
+    const x = input[index]
+    const y = input[index + 1]
+    const z = input[index + 2]
+
+    output[index] = x
+    output[index + 1] = z
+    output[index + 2] = -y
+  }
+
+  return output
+}
+
+function calculateViewMetrics(
+  model: ImportedCadBody | null,
+): ViewMetrics {
+  if (!model) {
+    return {
+      target: [0, 0.8, 0],
+      radius: 1.75,
+    }
+  }
+
+  const vertices =
+    convertZUpToYUp(
+      model.faces.vertices,
+    )
+
+  if (vertices.length < 3) {
+    return {
+      target: [0, 0.8, 0],
+      radius: 1.75,
+    }
+  }
+
+  const bounds = new THREE.Box3()
+  const point = new THREE.Vector3()
+
+  for (
+    let index = 0;
+    index < vertices.length;
+    index += 3
+  ) {
+    point.set(
+      vertices[index],
+      vertices[index + 1],
+      vertices[index + 2],
+    )
+
+    bounds.expandByPoint(point)
+  }
+
+  const size =
+    bounds.getSize(
+      new THREE.Vector3(),
+    )
+
+  const radius = Math.max(
+    size.length() / 2,
+    0.5,
+  )
+
+  /*
+   * ImportedModel centers X and Z and places
+   * the bottom of the model on Y = 0.
+   */
+  return {
+    target: [
+      0,
+      Math.max(size.y / 2, 0.01),
+      0,
+    ],
+    radius,
+  }
+}
+
+function TestModel({
+  settings,
+}: {
+  settings: DisplaySettings
+}) {
+  const isWireframe =
+    settings.displayStyle ===
+    'wireframe'
+
+  const isGhosted =
+    settings.displayStyle ===
+    'ghosted'
+
+  const showEdges =
+    settings.displayStyle ===
+      'shaded-edges' ||
+    settings.displayStyle ===
+      'ghosted'
+
+  const modelOpacity = isGhosted
+    ? Math.min(
+        settings.modelOpacity,
+        0.28,
+      )
+    : settings.modelOpacity
+
   return (
-    <mesh
-      castShadow
-      receiveShadow
-      position={[0, 0.8, 0]}
-    >
-      <boxGeometry args={[2.6, 1.6, 1.2]} />
+    <mesh position={[0, 0.8, 0]}>
+      <boxGeometry
+        args={[2.6, 1.6, 1.2]}
+      />
 
       <meshStandardMaterial
-        color="#91b9db"
-        metalness={0.08}
-        roughness={0.52}
+        color={settings.modelColor}
+        metalness={0.05}
+        roughness={0.55}
+        wireframe={isWireframe}
+        transparent={modelOpacity < 1}
+        opacity={modelOpacity}
+        depthWrite={modelOpacity >= 1}
+        side={THREE.DoubleSide}
       />
 
-      <Edges
-        color="#30495e"
-        threshold={15}
-      />
+      {showEdges && !isWireframe && (
+        <Edges
+          color={settings.edgeColor}
+          threshold={15}
+        />
+      )}
     </mesh>
   )
 }
 
-export function CadViewport() {
+function ImportedModel({
+  model,
+  settings,
+}: {
+  model: ImportedCadBody
+  settings: DisplaySettings
+}) {
+  const faceGeometry =
+    useMemo(() => {
+      const geometry =
+        new THREE.BufferGeometry()
+
+      geometry.setAttribute(
+        'position',
+        new THREE.BufferAttribute(
+          convertZUpToYUp(
+            model.faces.vertices,
+          ),
+          3,
+        ),
+      )
+
+      if (
+        model.faces.normals.length >
+        0
+      ) {
+        geometry.setAttribute(
+          'normal',
+          new THREE.BufferAttribute(
+            convertZUpToYUp(
+              model.faces.normals,
+            ),
+            3,
+          ),
+        )
+      } else {
+        geometry.computeVertexNormals()
+      }
+
+      geometry.setIndex(
+        new THREE.BufferAttribute(
+          Uint32Array.from(
+            model.faces.triangles,
+          ),
+          1,
+        ),
+      )
+
+      geometry.computeBoundingBox()
+      geometry.computeBoundingSphere()
+
+      return geometry
+    }, [model])
+
+  const edgeGeometry =
+    useMemo(() => {
+      const geometry =
+        new THREE.BufferGeometry()
+
+      geometry.setAttribute(
+        'position',
+        new THREE.BufferAttribute(
+          convertZUpToYUp(
+            model.edges.lines,
+          ),
+          3,
+        ),
+      )
+
+      geometry.computeBoundingBox()
+      geometry.computeBoundingSphere()
+
+      return geometry
+    }, [model])
+
+  const modelPosition =
+    useMemo(() => {
+      const boundingBox =
+        faceGeometry.boundingBox
+
+      if (!boundingBox) {
+        return new THREE.Vector3()
+      }
+
+      const center =
+        boundingBox.getCenter(
+          new THREE.Vector3(),
+        )
+
+      return new THREE.Vector3(
+        -center.x,
+        -boundingBox.min.y,
+        -center.z,
+      )
+    }, [faceGeometry])
+
+  useEffect(() => {
+    return () => {
+      faceGeometry.dispose()
+      edgeGeometry.dispose()
+    }
+  }, [
+    faceGeometry,
+    edgeGeometry,
+  ])
+
+  const isWireframe =
+    settings.displayStyle ===
+    'wireframe'
+
+  const isGhosted =
+    settings.displayStyle ===
+    'ghosted'
+
+  const showEdges =
+    settings.displayStyle ===
+      'shaded-edges' ||
+    settings.displayStyle ===
+      'ghosted'
+
+  const modelOpacity = isGhosted
+    ? Math.min(
+        settings.modelOpacity,
+        0.28,
+      )
+    : settings.modelOpacity
+
+  return (
+    <group position={modelPosition}>
+      <mesh geometry={faceGeometry}>
+        <meshStandardMaterial
+          color={settings.modelColor}
+          metalness={0.04}
+          roughness={0.58}
+          wireframe={isWireframe}
+          transparent={modelOpacity < 1}
+          opacity={modelOpacity}
+          depthWrite={
+            modelOpacity >= 1
+          }
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {showEdges && !isWireframe && (
+        <lineSegments
+          geometry={edgeGeometry}
+        >
+          <lineBasicMaterial
+            color={settings.edgeColor}
+            transparent={
+              settings.edgeOpacity < 1
+            }
+            opacity={
+              settings.edgeOpacity
+            }
+          />
+        </lineSegments>
+      )}
+    </group>
+  )
+}
+
+function CameraController({
+  command,
+  metrics,
+}: {
+  command: ViewCommand | null
+  metrics: ViewMetrics
+}) {
+  const controlsRef =
+    useRef<OrbitControlsInstance>(
+      null,
+    )
+
+  const {
+    camera,
+    invalidate,
+  } = useThree()
+
+  useEffect(() => {
+    const target =
+      new THREE.Vector3(
+        ...metrics.target,
+      )
+
+    let direction =
+      camera.position
+        .clone()
+        .sub(target)
+
+    const commandType =
+      command?.type ?? 'isometric'
+
+    if (
+      commandType ===
+      'isometric'
+    ) {
+      direction.set(1, 0.8, 1)
+    }
+
+    if (
+      direction.lengthSq() <
+      0.000001
+    ) {
+      direction.set(1, 0.8, 1)
+    }
+
+    direction.normalize()
+
+    camera.up.set(0, 1, 0)
+
+    if (
+      camera instanceof
+      THREE.PerspectiveCamera
+    ) {
+      const verticalHalfAngle =
+        THREE.MathUtils.degToRad(
+          camera.fov / 2,
+        )
+
+      const horizontalHalfAngle =
+        Math.atan(
+          Math.tan(
+            verticalHalfAngle,
+          ) * camera.aspect,
+        )
+
+      const limitingHalfAngle =
+        Math.min(
+          verticalHalfAngle,
+          horizontalHalfAngle,
+        )
+
+      const distance =
+        (
+          metrics.radius /
+          Math.sin(
+            Math.max(
+              limitingHalfAngle,
+              0.01,
+            ),
+          )
+        ) * 1.2
+
+      camera.position
+        .copy(target)
+        .addScaledVector(
+          direction,
+          distance,
+        )
+
+      camera.near = Math.max(
+        0.01,
+        distance -
+          metrics.radius * 3,
+      )
+
+      camera.far = Math.max(
+        1000,
+        distance +
+          metrics.radius * 20,
+      )
+    }
+
+    if (
+      camera instanceof
+      THREE.OrthographicCamera
+    ) {
+      const desiredHeight =
+        Math.max(
+          metrics.radius * 2.5,
+          1,
+        )
+
+      const baseHeight =
+        Math.abs(
+          camera.top -
+            camera.bottom,
+        )
+
+      camera.zoom =
+        baseHeight /
+        desiredHeight
+
+      const distance =
+        Math.max(
+          metrics.radius * 4,
+          10,
+        )
+
+      camera.position
+        .copy(target)
+        .addScaledVector(
+          direction,
+          distance,
+        )
+
+      camera.near = 0.01
+      camera.far = Math.max(
+        1000,
+        distance +
+          metrics.radius * 20,
+      )
+    }
+
+    camera.lookAt(target)
+    camera.updateProjectionMatrix()
+    camera.updateMatrixWorld()
+
+    const controls =
+      controlsRef.current
+
+    if (controls) {
+      controls.target.copy(target)
+      controls.update()
+    }
+
+    invalidate()
+  }, [
+    camera,
+    command,
+    invalidate,
+    metrics.radius,
+    metrics.target,
+  ])
+
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault
+      enableDamping
+      dampingFactor={0.08}
+      minDistance={0.01}
+      maxDistance={100000}
+    />
+  )
+}
+
+export function CadViewport({
+  model,
+  settings =
+    defaultDisplaySettings,
+  viewCommand = null,
+}: CadViewportProps) {
+  const lightStrength =
+    settings.brightness
+
+  const isOrthographic =
+    settings.projection ===
+    'orthographic'
+
+  const viewMetrics =
+    useMemo(
+      () =>
+        calculateViewMetrics(
+          model,
+        ),
+      [model],
+    )
+
   return (
     <Canvas
-      shadows
+      key={settings.projection}
+      orthographic={
+        isOrthographic
+      }
       camera={{
         position: [5, 4, 6],
         fov: 42,
+        zoom: 1,
         near: 0.01,
-        far: 10000,
+        far: 100000,
+      }}
+      gl={{
+        antialias: true,
+        logarithmicDepthBuffer:
+          true,
       }}
     >
-      <color attach="background" args={['#10171f']} />
+      <color
+        attach="background"
+        args={[
+          settings.backgroundColor,
+        ]}
+      />
 
-      <ambientLight intensity={1.4} />
+      <ambientLight
+        intensity={
+          1.25 * lightStrength
+        }
+      />
 
-      <directionalLight
-        castShadow
-        intensity={2.8}
-        position={[6, 10, 8]}
+      <hemisphereLight
+        intensity={
+          1.1 * lightStrength
+        }
+        color="#d8ecff"
+        groundColor="#182430"
       />
 
       <directionalLight
-        intensity={0.7}
-        position={[-5, 2, -4]}
+        intensity={
+          2.2 * lightStrength
+        }
+        position={[7, 10, 8]}
       />
 
-      <Grid
-        position={[0, 0, 0]}
-        infiniteGrid
-        cellSize={0.5}
-        sectionSize={5}
-        cellColor="#263746"
-        sectionColor="#45627a"
-        fadeDistance={45}
-        fadeStrength={1.5}
+      <directionalLight
+        intensity={
+          0.55 * lightStrength
+        }
+        position={[-5, 3, -6]}
       />
 
-      <axesHelper
-        args={[3]}
-        position={[0, 0.01, 0]}
-      />
-
-      <TestModel />
-
-      <OrbitControls
-        makeDefault
-        target={[0, 0.8, 0]}
-        enableDamping
-        dampingFactor={0.08}
-      />
-
-      <GizmoHelper
-        alignment="bottom-right"
-        margin={[72, 72]}
-      >
-        <GizmoViewport
-          axisColors={[
-            '#ef5350',
-            '#66bb6a',
-            '#42a5f5',
+      {settings.showGrid && (
+        <Grid
+          position={[
+            0,
+            -0.002,
+            0,
           ]}
-          labelColor="#ffffff"
+          infiniteGrid
+          followCamera
+          frustumCulled={false}
+          side={THREE.DoubleSide}
+          cellSize={0.5}
+          cellThickness={0.7}
+          cellColor={
+            settings.gridColor
+          }
+          sectionSize={5}
+          sectionThickness={1.4}
+          sectionColor={
+            settings.gridColor
+          }
+          fadeDistance={5000}
+          fadeStrength={0.6}
+          fadeFrom={1}
         />
-      </GizmoHelper>
+      )}
+
+      {settings.showAxes && (
+        <axesHelper
+          args={[3]}
+          position={[
+            0,
+            0.005,
+            0,
+          ]}
+        />
+      )}
+
+      {model ? (
+        <ImportedModel
+          model={model}
+          settings={settings}
+        />
+      ) : (
+        <TestModel
+          settings={settings}
+        />
+      )}
+
+      <CameraController
+        command={viewCommand}
+        metrics={viewMetrics}
+      />
+
+      {settings.showViewCube && (
+        <GizmoHelper
+          alignment="bottom-right"
+          margin={[72, 72]}
+        >
+          <GizmoViewport
+            axisColors={[
+              '#ef5350',
+              '#66bb6a',
+              '#42a5f5',
+            ]}
+            labelColor="#ffffff"
+          />
+        </GizmoHelper>
+      )}
     </Canvas>
   )
 }
