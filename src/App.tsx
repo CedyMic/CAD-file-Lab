@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -47,6 +48,11 @@ import {
   type ViewCommandType,
 } from './viewer/CadViewport'
 import { updateBodySelection } from './viewer/bodySelection'
+import {
+  calculateMeshProperties,
+  formatAreaMm2,
+  formatVolumeMm3,
+} from './viewer/meshProperties'
 
 import {
   DisplayPanel,
@@ -254,6 +260,11 @@ function App() {
 
   const selectedParts = model?.renderParts.filter((part) => selectedPartIds.has(part.id)) ?? []
   const selectedPart = selectedParts[0] ?? null
+  const measuredProperties = useMemo(() => {
+    const mesh = selectedPart?.faces ?? model?.faces
+    if (!mesh) return null
+    return calculateMeshProperties({ vertices: mesh.vertices, triangles: mesh.triangles })
+  }, [model, selectedPart])
   const visibleParts = model?.renderParts.filter((part) => !hiddenPartIds.has(part.id)) ?? []
   const exportParts = exportScope === 'selected' ? selectedParts : visibleParts
 
@@ -1653,6 +1664,17 @@ function App() {
 
           {model ? (
             <>
+              {activeTool === 'measure' && measuredProperties && (
+                <section className="measurement-properties">
+                  <span className="panel-label">Mesh properties</span>
+                  <div><span>Scope</span><strong>{selectedPart?.name ?? 'Whole model'}</strong></div>
+                  <div><span>Surface area</span><strong>{formatAreaMm2(measuredProperties.surfaceAreaMm2)}</strong></div>
+                  <div><span>Enclosed volume</span><strong>{measuredProperties.enclosedVolumeMm3 === null
+                    ? 'Unavailable · open mesh'
+                    : formatVolumeMm3(measuredProperties.enclosedVolumeMm3)}</strong></div>
+                  <small>Area and volume are calculated from the displayed mesh.</small>
+                </section>
+              )}
               {(activeTool === 'convert' || activeTool === 'simplify') && (
                 <section className="conversion-panel" aria-labelledby="conversion-title">
                   <span className="panel-label">{activeTool === 'simplify' ? 'Local model reduction' : 'Local format conversion'}</span>

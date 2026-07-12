@@ -447,6 +447,20 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
+.measurement-properties {
+  padding: 11px 14px;
+  display: grid;
+  gap: 7px;
+  background: #182731;
+  border-bottom: 1px solid #344553;
+}
+
+.measurement-properties div { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; }
+.measurement-properties div span,
+.measurement-properties small { color: #9fb3c5; }
+.measurement-properties div strong { color: #e5f1fa; text-align: right; }
+.measurement-properties small { font-size: 9px; line-height: 1.35; }
+
 .sidebar-heading p,
 .panel-label {
   margin: 0 0 6px;
