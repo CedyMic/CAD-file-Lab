@@ -13,6 +13,7 @@ export interface CadEdgeMesh {
 export interface ImportedCadBody {
   bodyId: string
   fileName: string
+  editable: boolean
   bodySummaries: Array<{
     id: string
     name: string
@@ -110,6 +111,7 @@ function isImportedCadBody(
     'edges' in data &&
     'bodySummaries' in data &&
     Array.isArray(data.bodySummaries) &&
+    typeof data.editable === 'boolean' &&
     typeof data.bodyId === 'string'
   )
 }

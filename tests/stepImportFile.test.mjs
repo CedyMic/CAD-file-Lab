@@ -6,10 +6,11 @@ import {
   validateStepImportFile,
 } from '../src/cad/stepImportFile.ts'
 
-test('accepts STEP and STP metadata at the size limit', () => {
+test('accepts STEP, STP and STL metadata at the size limit', () => {
   for (const name of [
     'assembly.step',
     'ASSEMBLY.STP',
+    'mesh.stl',
   ]) {
     assert.doesNotThrow(() => {
       validateStepImportFile({
@@ -23,10 +24,10 @@ test('accepts STEP and STP metadata at the size limit', () => {
 test('rejects unsupported or empty CAD files', () => {
   assert.throws(
     () => validateStepImportFile({
-      name: 'mesh.stl',
+      name: 'mesh.obj',
       size: 1,
     }),
-    /supports STEP and STP/,
+    /supports STEP, STP and STL/,
   )
 
   assert.throws(

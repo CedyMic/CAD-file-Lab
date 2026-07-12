@@ -26,10 +26,11 @@ export function validateStepImportFile(
 
   if (
     extension !== 'step' &&
-    extension !== 'stp'
+    extension !== 'stp' &&
+    extension !== 'stl'
   ) {
     throw new Error(
-      'This editable version currently supports STEP and STP files.',
+      'This version currently supports STEP, STP and STL files.',
     )
   }
 
@@ -45,7 +46,7 @@ export function validateStepImportFile(
     file.size > MAX_STEP_IMPORT_BYTES
   ) {
     throw new Error(
-      'STEP files larger than 256 MiB are not supported because browser-local parsing can exhaust available memory.',
+      '3D files larger than 256 MiB are not supported because browser-local parsing can exhaust available memory.',
     )
   }
 }

@@ -10,6 +10,9 @@ import {
   setOC,
 } from 'replicad'
 
+import { EdgesGeometry } from 'three'
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
+
 import {
   validateStepImportFile,
 } from './stepImportFile'
@@ -70,6 +73,7 @@ type WorkerRequest =
 interface ImportedBodyData {
   bodyId: string
   fileName: string
+  editable: boolean
   bodySummaries: Array<{
     id: string
     name: string
@@ -279,6 +283,7 @@ function createRenderData(
   return {
     bodyId,
     fileName,
+    editable: true,
     bodySummaries: Array.from(
       { length: bodyCount },
       (_, index) => ({
@@ -301,10 +306,60 @@ function createRenderData(
   }
 }
 
+async function importStlFile(
+  file: File,
+): Promise<ImportedBodyData> {
+  const geometry = new STLLoader().parse(await file.arrayBuffer())
+
+  if (!geometry.getAttribute('normal')) {
+    geometry.computeVertexNormals()
+  }
+
+  const position = geometry.getAttribute('position')
+  const normal = geometry.getAttribute('normal')
+  const index = geometry.getIndex()
+  const edgeGeometry = new EdgesGeometry(geometry, 15)
+  const edgePosition = edgeGeometry.getAttribute('position')
+  const bodyId = crypto.randomUUID()
+
+  if (position.count === 0) {
+    geometry.dispose()
+    edgeGeometry.dispose()
+    throw new Error('The selected STL file contains no triangles.')
+  }
+
+  const renderData: ImportedBodyData = {
+    bodyId,
+    fileName: file.name,
+    editable: false,
+    bodySummaries: [{ id: `${bodyId}-body-1`, name: 'Mesh 1' }],
+    faces: {
+      vertices: Array.from(position.array),
+      normals: Array.from(normal.array),
+      triangles: index
+        ? Array.from(index.array)
+        : Array.from({ length: position.count }, (_, triangleIndex) => triangleIndex),
+      faceGroups: [],
+    },
+    edges: {
+      lines: Array.from(edgePosition.array),
+      edgeGroups: [],
+    },
+  }
+
+  geometry.dispose()
+  edgeGeometry.dispose()
+  return renderData
+}
+
 async function importStepFile(
   file: File,
 ): Promise<ImportedBodyData> {
   validateStepImportFile(file)
+
+  if (file.name.toLowerCase().endsWith('.stl')) {
+    return importStlFile(file)
+  }
 
   await initializeCadKernel()
 

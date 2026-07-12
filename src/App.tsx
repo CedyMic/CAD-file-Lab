@@ -402,6 +402,7 @@ function App() {
     useCallback(async () => {
       if (
         !model ||
+        !model.editable ||
         !localRecoveryEnabled ||
         recoverySaveInProgressRef.current
       ) {
@@ -508,7 +509,7 @@ function App() {
     importedModel: ImportedCadBody,
     recoveryDisplaySettings = displaySettings,
   ): Promise<void> {
-    if (!localRecoveryEnabled) {
+    if (!localRecoveryEnabled || !importedModel.editable) {
       return
     }
 
@@ -623,7 +624,7 @@ function App() {
       )
 
       setStatus(
-        'Invalid STEP file',
+        'Unsupported or invalid 3D file',
       )
 
       return
@@ -672,7 +673,7 @@ function App() {
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : 'The STEP file could not be imported.'
+          : 'The 3D file could not be imported.'
 
       setError(message)
 
@@ -684,7 +685,7 @@ function App() {
   }
 
   async function saveProjectFile(): Promise<void> {
-    if (!model) {
+    if (!model || !model.editable) {
       return
     }
 
@@ -914,6 +915,10 @@ function App() {
 
   function getRecoveryStatus():
     string {
+    if (model && !model.editable) {
+      return 'View-only mesh · Local recovery unavailable'
+    }
+
     if (isSavingRecovery) {
       return 'Saving local recovery…'
     }
@@ -995,7 +1000,7 @@ function App() {
             ref={fileInputRef}
             hidden
             type="file"
-            accept=".step,.stp"
+            accept=".step,.stp,.stl"
             onChange={(event) => {
               const file =
                 event.target.files?.[0]
@@ -1119,14 +1124,16 @@ function App() {
             </span>
 
             <span className="autosave-status">
-              {!localRecoveryEnabled
+              {model && !model.editable
+                ? 'Processed locally; original file is unchanged'
+                : !localRecoveryEnabled
                 ? 'Autosave paused for this open model'
                 : storageIsPersistent === true
                 ? 'Protected browser storage enabled'
                 : 'Stored locally in this browser'}
             </span>
 
-            {model && (
+            {model?.editable && (
               <button
                 type="button"
                 className="secondary-button"
@@ -1315,8 +1322,9 @@ function App() {
                   <div className="format-badges">
                     <span>STEP <small>.step</small></span>
                     <span>STP <small>.stp</small></span>
+                    <span>STL <small>.stl</small></span>
                   </div>
-                  <small>Files up to 256 MiB · More formats are in development</small>
+                  <small>Files up to 256 MiB · STL is view-only · More formats are in development</small>
                 </div>
                 <ol className="getting-started-steps">
                   <li><strong>Open</strong><span>Choose or drop a supported file</span></li>
