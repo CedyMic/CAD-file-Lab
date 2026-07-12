@@ -1233,7 +1233,16 @@ function App() {
                       aria-label={`${hiddenPartIds.has(body.id) ? 'Show' : 'Hide'} ${body.name}`}
                       title={`${hiddenPartIds.has(body.id) ? 'Show' : 'Hide'} ${body.name}`}
                     >
-                      {hiddenPartIds.has(body.id) ? '○' : '●'}
+                      {hiddenPartIds.has(body.id) ? (
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M3 3l18 18M10.6 10.7a2 2 0 002.7 2.7M9.9 4.2A10.7 10.7 0 0112 4c5.5 0 9 5.2 9 5.2a15 15 0 01-2.3 2.7M6.2 6.3C4.2 7.7 3 9.2 3 9.2s3.5 5.2 9 5.2a10 10 0 003.1-.5" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M3 12s3.5-5.2 9-5.2 9 5.2 9 5.2-3.5 5.2-9 5.2S3 12 3 12z" />
+                          <circle cx="12" cy="12" r="2.5" />
+                        </svg>
+                      )}
                     </button>
                   </li>
                 ))}
@@ -1577,8 +1586,11 @@ function App() {
             <>
               {selectedPart && (
                 <section className="body-properties">
+                  <span className="panel-label">
+                    {selectedParts.length > 1 ? 'Selected bodies controls' : 'Selected body controls'}
+                  </span>
                   <label>
-                    <span>Body color</span>
+                    <span>{selectedParts.length > 1 ? 'Selected bodies color' : 'Selected body color'}</span>
                     <input
                       type="color"
                       value={partColors.get(selectedPart.id) ?? displaySettings.modelColor}

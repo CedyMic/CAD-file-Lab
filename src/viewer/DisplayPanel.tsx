@@ -111,23 +111,6 @@ export function DisplayPanel({
       <div className="display-color-grid">
         <label className="display-field">
           <span>
-            Model
-          </span>
-
-          <input
-            type="color"
-            value={settings.modelColor}
-            onChange={(event) => {
-              updateSetting(
-                'modelColor',
-                event.target.value,
-              )
-            }}
-          />
-        </label>
-
-        <label className="display-field">
-          <span>
             Edges
           </span>
 
