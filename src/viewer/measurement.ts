@@ -5,6 +5,8 @@ export interface FaceSample {
   point: MeasurementPoint
   normal: MeasurementNormal
   triangle?: readonly [MeasurementPoint, MeasurementPoint, MeasurementPoint]
+  surfaceTriangles?: readonly MeasurementPoint[]
+  entityId?: string
 }
 
 export interface DistanceMeasurement {
@@ -105,4 +107,31 @@ export function faceAngleDegrees(first: FaceSample, second: FaceSample): number 
     first.normal[2] * second.normal[2]
   ) / (lengthA * lengthB)
   return Math.acos(Math.min(1, Math.max(-1, Math.abs(dot)))) * 180 / Math.PI
+}
+
+export function circularPolylineRadius(points: readonly MeasurementPoint[]): number | null {
+  if (points.length < 8) return null
+  const chain = points.filter((_, index) => index % 2 === 0)
+  chain.push(points[points.length - 1])
+  const distance = (a: MeasurementPoint, b: MeasurementPoint) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+  const scale = Math.max(...chain.slice(1).map((point) => distance(chain[0], point)), 1)
+  if (distance(chain[0], chain[chain.length - 1]) > scale * 1e-3) return null
+  const p1 = chain[0]
+  const p2 = chain[Math.floor((chain.length - 1) / 3)]
+  const p3 = chain[Math.floor((chain.length - 1) * 2 / 3)]
+  const a = [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]]
+  const b = [p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]]
+  const cross = (u: number[], v: number[]) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+  const n = cross(a, b)
+  const n2 = n.reduce((sum, value) => sum + value * value, 0)
+  if (n2 < 1e-16) return null
+  const a2 = a.reduce((sum, value) => sum + value * value, 0)
+  const b2 = b.reduce((sum, value) => sum + value * value, 0)
+  const bCrossN = cross(b, n)
+  const nCrossA = cross(n, a)
+  const center = p1.map((value, index) => value + (a2 * bCrossN[index] + b2 * nCrossA[index]) / (2 * n2)) as unknown as MeasurementPoint
+  const radius = distance(center, p1)
+  if (!Number.isFinite(radius) || radius <= 0) return null
+  const maximumError = Math.max(...chain.map((point) => Math.abs(distance(center, point) - radius)))
+  return maximumError <= Math.max(radius * 0.01, 1e-4) ? radius : null
 }

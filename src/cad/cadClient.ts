@@ -4,12 +4,12 @@ export interface CadFaceMesh {
   vertices: number[] | Float32Array
   normals: number[] | Float32Array
   triangles: number[] | Uint32Array
-  faceGroups?: unknown[]
+  faceGroups?: Array<{ start: number; count: number; faceId: number }>
 }
 
 export interface CadEdgeMesh {
   lines: number[] | Float32Array
-  edgeGroups?: unknown[]
+  edgeGroups?: Array<{ start: number; count: number; edgeId: number }>
 }
 
 export interface CadRenderPart {

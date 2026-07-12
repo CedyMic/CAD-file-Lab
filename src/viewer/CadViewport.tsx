@@ -35,6 +35,7 @@ import {
 import {
   addDistancePoint,
   coordinateDeltas,
+  circularPolylineRadius,
   emptyDistanceMeasurement,
   faceAngleDegrees,
   formatDistanceMillimetres,
@@ -76,6 +77,8 @@ export interface MeasurementSummary {
   faceGap?: number
   faceAngle?: number
   lineLength?: number
+  radius?: number
+  diameter?: number
 }
 
 interface ViewMetrics {
@@ -241,7 +244,7 @@ function ImportedPart({
   opacity: number
   onSelect: (additive: boolean) => void
   onMeasurePoint?: (sample: FaceSample) => void
-  onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint) => void
+  onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number) => void
 }) {
   const faceGeometry =
     useMemo(() => {
@@ -360,10 +363,26 @@ function ImportedPart({
                   return [vertex.x, vertex.y, vertex.z] as MeasurementPoint
                 }) as [MeasurementPoint, MeasurementPoint, MeasurementPoint])
               : undefined
+            const triangleOffset = (event.faceIndex ?? -1) * 3
+            const faceGroup = part.faces.faceGroups?.find((group) => (
+              triangleOffset >= group.start && triangleOffset < group.start + group.count
+            ))
+            const surfaceTriangles: MeasurementPoint[] = []
+            if (faceGroup) {
+              const geometryIndex = faceGeometry.getIndex()
+              const positions = faceGeometry.getAttribute('position')
+              for (let offset = faceGroup.start; offset < faceGroup.start + faceGroup.count; offset += 1) {
+                const vertexIndex = geometryIndex ? geometryIndex.getX(offset) : offset
+                const vertex = new THREE.Vector3().fromBufferAttribute(positions, vertexIndex).applyMatrix4(event.object.matrixWorld)
+                surfaceTriangles.push([vertex.x, vertex.y, vertex.z])
+              }
+            }
             onMeasurePoint({
               point: [event.point.x, event.point.y, event.point.z],
               normal: [normal.x, normal.y, normal.z],
               triangle,
+              surfaceTriangles: surfaceTriangles.length ? surfaceTriangles : triangle,
+              entityId: faceGroup ? `${part.id}-face-${faceGroup.faceId}` : `${part.id}-triangle-${event.faceIndex ?? 0}`,
             })
             return
           }
@@ -397,10 +416,19 @@ function ImportedPart({
             if (!onMeasureLine) return
             event.stopPropagation()
             const position = edgeGeometry.getAttribute('position')
-            const startIndex = Math.max(0, Math.min(event.index ?? 0, position.count - 2))
-            const first = new THREE.Vector3().fromBufferAttribute(position, startIndex).applyMatrix4(event.object.matrixWorld)
-            const second = new THREE.Vector3().fromBufferAttribute(position, startIndex + 1).applyMatrix4(event.object.matrixWorld)
-            onMeasureLine([first.x, first.y, first.z], [second.x, second.y, second.z])
+            const hitIndex = Math.max(0, Math.min(event.index ?? 0, position.count - 2))
+            const group = part.edges.edgeGroups?.find((candidate) => hitIndex >= candidate.start && hitIndex < candidate.start + candidate.count)
+            const startIndex = group?.start ?? hitIndex
+            const count = group?.count ?? 2
+            const vertices = Array.from({ length: count }, (_, offset) => {
+              const point = new THREE.Vector3().fromBufferAttribute(position, startIndex + offset).applyMatrix4(event.object.matrixWorld)
+              return [point.x, point.y, point.z] as MeasurementPoint
+            })
+            let length = 0
+            for (let index = 0; index + 1 < vertices.length; index += 2) {
+              length += new THREE.Vector3(...vertices[index]).distanceTo(new THREE.Vector3(...vertices[index + 1]))
+            }
+            onMeasureLine(vertices[0], vertices[vertices.length - 1], vertices, length)
           }}
         >
           <lineBasicMaterial
@@ -446,7 +474,7 @@ function ImportedModel({
   partOpacities: ReadonlyMap<string, number>
   onSelectPart: (partId: string, additive: boolean) => void
   onMeasurePoint?: (sample: FaceSample) => void
-  onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint) => void
+  onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number) => void
 }) {
   const modelPosition = useMemo(() => {
     const positions = convertZUpToYUp(model.faces.vertices)
@@ -487,11 +515,15 @@ function DistanceAnnotation({
   points,
   faces,
   kind,
+  lineVertices,
+  lineLength,
   onReset,
 }: {
   points: readonly MeasurementPoint[]
   faces: readonly FaceSample[]
   kind: 'points' | 'line'
+  lineVertices: readonly MeasurementPoint[]
+  lineLength?: number
   onReset: () => void
 }) {
   if (points.length === 0) return null
@@ -520,12 +552,12 @@ function DistanceAnnotation({
 
   return (
     <group>
-      {faces.map((face, index) => face.triangle && (
+      {faces.map((face, index) => (face.surfaceTriangles ?? face.triangle) && (
         <mesh key={`face-${index}`} renderOrder={19}>
           <bufferGeometry>
             <bufferAttribute
               attach="attributes-position"
-              args={[new Float32Array(face.triangle.flat()), 3]}
+              args={[new Float32Array((face.surfaceTriangles ?? face.triangle!).flat()), 3]}
             />
           </bufferGeometry>
           <meshBasicMaterial color="#ffad24" transparent opacity={0.42} depthTest={false} side={THREE.DoubleSide} />
@@ -549,12 +581,20 @@ function DistanceAnnotation({
           </lineSegments>
         </>
       )}
+      {lineVertices.length > 1 && (
+        <lineSegments renderOrder={21}>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[new Float32Array(lineVertices.flat()), 3]} />
+          </bufferGeometry>
+          <lineBasicMaterial color="#ffad24" depthTest={false} />
+        </lineSegments>
+      )}
       <Html position={labelPosition} center zIndexRange={[40, 0]}>
         <div style={{ background: '#102331ee', border: '1px solid #4380a3', borderRadius: 4, color: '#eef8ff', font: '600 12px system-ui', padding: '5px 7px', whiteSpace: 'nowrap', pointerEvents: 'auto' }}>
           <span style={{ display: 'block', marginBottom: 3, color: '#86bddd', fontSize: 10, fontWeight: 600 }}>
             Selected: {kind === 'line' ? 'Line' : faces.map((_, index) => `Face ${index + 1}`).join(' · ') || `Point ${points.length}`}
           </span>
-          {distance === null ? 'Select second point' : `${kind === 'line' ? 'Line length' : 'Minimum'} ${formatDistanceMillimetres(distance)}`}
+          {distance === null ? 'Select second point' : `${kind === 'line' ? 'Line length' : 'Minimum'} ${formatDistanceMillimetres(kind === 'line' ? lineLength ?? distance : distance)}`}
           {distance !== null && (
             <span style={{ marginLeft: 7, color: faceDistance === null ? '#f0c68c' : '#9de0b4' }}>
               {faceDistance === null
@@ -597,11 +637,14 @@ function MeasurableImportedModel({
     distance: emptyDistanceMeasurement,
     faces: [] as FaceSample[],
     kind: 'points' as 'points' | 'line',
+    lineVertices: [] as MeasurementPoint[],
+    lineLength: undefined as number | undefined,
+    radius: undefined as number | undefined,
   })
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points' })
+      if (event.key === 'Escape') setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined })
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -629,7 +672,9 @@ function MeasurableImportedModel({
       faceAngle: measurement.faces.length === 2 && faceGap === null
         ? faceAngleDegrees(measurement.faces[0], measurement.faces[1])
         : undefined,
-      lineLength: measurement.kind === 'line' ? getDistanceMillimetres(measurement.distance) ?? undefined : undefined,
+      lineLength: measurement.kind === 'line' ? measurement.lineLength : undefined,
+      radius: measurement.radius,
+      diameter: measurement.radius === undefined ? undefined : measurement.radius * 2,
     })
   }, [measurement, onMeasurementChange])
 
@@ -646,29 +691,30 @@ function MeasurableImportedModel({
         onMeasurePoint={(sample) => {
           setMeasurement((current) => {
             const existing = current.faces.length === 1 ? current.faces[0] : null
-            const sameFace = existing?.triangle && sample.triangle && existing.triangle.every(
-              (point, pointIndex) => point.every(
-                (value, axis) => Math.abs(value - sample.triangle![pointIndex][axis]) < 1e-7,
-              ),
-            )
-            if (sameFace) return { distance: emptyDistanceMeasurement, faces: [], kind: 'points' }
+            const sameFace = existing?.entityId === sample.entityId
+            if (sameFace) return { distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined }
             const restart = current.distance.points.length >= 2
             return {
               distance: addDistancePoint(current.distance, sample.point),
               faces: restart ? [sample] : [...current.faces, sample],
               kind: 'points',
+              lineVertices: [],
+              lineLength: undefined,
+              radius: undefined,
             }
           })
         }}
-        onMeasureLine={(first, second) => {
-          setMeasurement({ distance: { points: [first, second] }, faces: [], kind: 'line' })
+        onMeasureLine={(first, second, vertices, length) => {
+          setMeasurement({ distance: { points: [first, second] }, faces: [], kind: 'line', lineVertices: vertices, lineLength: length, radius: circularPolylineRadius(vertices) ?? undefined })
         }}
       />
       <DistanceAnnotation
         points={measurement.distance.points}
         faces={measurement.faces}
         kind={measurement.kind}
-        onReset={() => setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points' })}
+        lineVertices={measurement.lineVertices}
+        lineLength={measurement.lineLength}
+        onReset={() => setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined })}
       />
     </>
   )

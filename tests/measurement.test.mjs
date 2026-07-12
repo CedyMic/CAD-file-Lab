@@ -10,6 +10,7 @@ import {
   coordinateDeltas,
   parallelFaceDistance,
   faceAngleDegrees,
+  circularPolylineRadius,
 } from '../src/viewer/measurement.ts'
 
 test('calculates a three-dimensional point-to-point distance', () => {
@@ -40,6 +41,17 @@ test('measures the acute angle between face planes', () => {
     { point: [0, 0, 0], normal: [1, 0, 0] },
     { point: [0, 0, 0], normal: [1, 1, 0] },
   ) - 45) < 1e-10)
+})
+
+test('detects circular closed edge polylines without mislabeling open lines', () => {
+  const circle = []
+  for (let index = 0; index < 12; index += 1) {
+    const first = index * Math.PI * 2 / 12
+    const second = (index + 1) * Math.PI * 2 / 12
+    circle.push([5 * Math.cos(first), 5 * Math.sin(first), 2], [5 * Math.cos(second), 5 * Math.sin(second), 2])
+  }
+  assert.ok(Math.abs(circularPolylineRadius(circle) - 5) < 1e-10)
+  assert.equal(circularPolylineRadius([[0, 0, 0], [5, 0, 0]]), null)
 })
 
 test('selects two points and starts a fresh measurement on the third', () => {

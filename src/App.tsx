@@ -1796,6 +1796,7 @@ function App() {
                   </div>
                   {measurementSummary.distance !== undefined && <div><span>Minimum distance</span><strong>{formatSignedMillimetres(measurementSummary.distance)}</strong></div>}
                   {measurementSummary.lineLength !== undefined && <div><span>Line length</span><strong>{formatSignedMillimetres(measurementSummary.lineLength)}</strong></div>}
+                  {measurementSummary.radius !== undefined && <div><span>Radius / Diameter</span><strong>{formatSignedMillimetres(measurementSummary.radius)} / {formatSignedMillimetres(measurementSummary.diameter ?? 0)}</strong></div>}
                   {measurementSummary.deltaX !== undefined && <div><span>ΔX / ΔY / ΔZ</span><strong>{formatSignedMillimetres(measurementSummary.deltaX)} / {formatSignedMillimetres(measurementSummary.deltaY ?? 0)} / {formatSignedMillimetres(measurementSummary.deltaZ ?? 0)}</strong></div>}
                   {measurementSummary.faceGap !== undefined && <div><span>Normal face gap</span><strong>{formatSignedMillimetres(measurementSummary.faceGap)}</strong></div>}
                   {measurementSummary.faceAngle !== undefined && <div><span>Face angle</span><strong>{measurementSummary.faceAngle.toFixed(2)}°</strong></div>}
