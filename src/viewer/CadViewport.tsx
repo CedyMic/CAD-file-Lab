@@ -314,8 +314,8 @@ function ImportedPart({
           color={color}
           emissive={selected ? '#b86b00' : '#000000'}
           emissiveIntensity={selected ? 0.28 : 0}
-          metalness={0.04}
-          roughness={0.58}
+          metalness={0.02}
+          roughness={0.68}
           wireframe={isWireframe}
           transparent={modelOpacity < 1}
           opacity={modelOpacity}
@@ -323,6 +323,9 @@ function ImportedPart({
             modelOpacity >= 1
           }
           side={THREE.DoubleSide}
+          polygonOffset
+          polygonOffsetFactor={1}
+          polygonOffsetUnits={1}
         />
       </mesh>
 
@@ -611,6 +614,9 @@ export function CadViewport({
       [model],
     )
 
+  const gridCellSize = Math.max(viewMetrics.radius / 8, 0.1)
+  const gridSectionSize = gridCellSize * 5
+
   return (
     <Canvas
       key={settings.projection}
@@ -624,10 +630,17 @@ export function CadViewport({
         near: 0.01,
         far: 100000,
       }}
+      dpr={[1, 2]}
       gl={{
         antialias: true,
+        powerPreference: 'high-performance',
         logarithmicDepthBuffer:
           true,
+      }}
+      onCreated={({ gl }) => {
+        gl.toneMapping = THREE.ACESFilmicToneMapping
+        gl.toneMappingExposure = 1.05
+        gl.outputColorSpace = THREE.SRGBColorSpace
       }}
     >
       <color
@@ -639,13 +652,13 @@ export function CadViewport({
 
       <ambientLight
         intensity={
-          1.25 * lightStrength
+          0.72 * lightStrength
         }
       />
 
       <hemisphereLight
         intensity={
-          1.1 * lightStrength
+          0.82 * lightStrength
         }
         color="#d8ecff"
         groundColor="#182430"
@@ -653,14 +666,14 @@ export function CadViewport({
 
       <directionalLight
         intensity={
-          2.2 * lightStrength
+          2.5 * lightStrength
         }
         position={[7, 10, 8]}
       />
 
       <directionalLight
         intensity={
-          0.55 * lightStrength
+          0.42 * lightStrength
         }
         position={[-5, 3, -6]}
       />
@@ -676,18 +689,18 @@ export function CadViewport({
           followCamera
           frustumCulled={false}
           side={THREE.DoubleSide}
-          cellSize={0.5}
-          cellThickness={0.7}
+          cellSize={gridCellSize}
+          cellThickness={0.45}
           cellColor={
             settings.gridColor
           }
-          sectionSize={5}
-          sectionThickness={1.4}
+          sectionSize={gridSectionSize}
+          sectionThickness={0.9}
           sectionColor={
             settings.gridColor
           }
-          fadeDistance={5000}
-          fadeStrength={0.6}
+          fadeDistance={Math.max(viewMetrics.radius * 8, 20)}
+          fadeStrength={1.4}
           fadeFrom={1}
         />
       )}
