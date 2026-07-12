@@ -10,6 +10,7 @@ export interface SketchExtrudeFeature {
   type: 'sketchExtrude'
   name: string
   plane: SketchPlane
+  planeOffset?: number
   profile: SketchProfile
   operation: 'boss' | 'cut'
   length: number
@@ -26,6 +27,14 @@ function dimension(value: number, label: string): number {
     throw new Error(`${label} must be greater than zero and no more than ${MAX_PRIMITIVE_DIMENSION_MM.toLocaleString('en-US')} mm.`)
   }
   return value
+}
+
+function signedOffset(value: number | undefined): number {
+  const offset = value ?? 0
+  if (!Number.isFinite(offset) || Math.abs(offset) > MAX_PRIMITIVE_DIMENSION_MM) {
+    throw new Error(`Plane offset must be between -${MAX_PRIMITIVE_DIMENSION_MM.toLocaleString('en-US')} and ${MAX_PRIMITIVE_DIMENSION_MM.toLocaleString('en-US')} mm.`)
+  }
+  return offset
 }
 
 export function validateCadFeatureModel(input: CadFeatureModel): CadFeatureModel {
@@ -47,11 +56,13 @@ export function validateCadFeatureModel(input: CadFeatureModel): CadFeatureModel
     const cleanProfile: SketchProfile = profile.type === 'rectangle'
       ? { type: 'rectangle', width: dimension(profile.width, 'Sketch width'), height: dimension(profile.height, 'Sketch height') }
       : { type: 'circle', radius: dimension(profile.radius, 'Sketch radius') }
+    const planeOffset = signedOffset(feature.planeOffset)
     return {
       id: feature.id,
       type: 'sketchExtrude',
       name: feature.name.trim(),
       plane: feature.plane,
+      ...(planeOffset === 0 ? {} : { planeOffset }),
       profile: cleanProfile,
       operation: feature.operation,
       length: dimension(feature.length, 'Extrude length'),

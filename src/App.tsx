@@ -207,6 +207,8 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
 }) {
   const [stage, setStage] = useState<'plane' | 'sketch' | 'extrude'>('plane')
   const [plane, setPlane] = useState<SketchExtrudeFeature['plane']>('XY')
+  const [planeOffset, setPlaneOffset] = useState(0)
+  const [creatingPlane, setCreatingPlane] = useState(false)
   const [tool, setTool] = useState<'rectangle' | 'circle'>('rectangle')
   const [drag, setDrag] = useState<{ start: [number, number]; end: [number, number] } | null>(null)
   const feature = model.features.at(-1)!
@@ -215,7 +217,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
   })
   const startSketch = () => {
     const next: SketchExtrudeFeature = {
-      id: `feature-${crypto.randomUUID()}`, type: 'sketchExtrude', name: 'Boss-Extrude1', plane,
+      id: `feature-${crypto.randomUUID()}`, type: 'sketchExtrude', name: 'Boss-Extrude1', plane, planeOffset,
       profile: { type: 'rectangle', width: 60, height: 40 }, operation: 'boss', length: 10, reversed: false,
     }
     onChange({ version: 1, features: [next] })
@@ -241,13 +243,20 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       {([['XY', 'Top'], ['XZ', 'Front'], ['YZ', 'Right']] as const).map(([value, label]) =>
         <button className={plane === value ? 'selected' : ''} type="button" key={value} onClick={() => setPlane(value)}><span>{value}</span><strong>{label} plane</strong></button>)}
     </div>
+    <button type="button" onClick={() => setCreatingPlane((current) => !current)}>＋ New offset plane</button>
+    {creatingPlane && <fieldset className="reference-plane-editor">
+      <legend>Plane1</legend>
+      <label><span>Reference plane</span><select value={plane} onChange={(event) => setPlane(event.target.value as SketchExtrudeFeature['plane'])}><option value="XY">Top (XY)</option><option value="XZ">Front (XZ)</option><option value="YZ">Right (YZ)</option></select></label>
+      <label><span>Offset (mm)</span><input type="number" step="0.01" value={planeOffset} onChange={(event) => setPlaneOffset(Number(event.target.value))} /></label>
+      <small>Use a negative value to offset in the opposite direction.</small>
+    </fieldset>}
     <button className="primary-button" type="button" onClick={startSketch}>Start sketch</button>
   </section>
   if (stage === 'sketch') {
     const preview = drag ?? { start: [110, 85] as [number, number], end: tool === 'rectangle' ? [210, 155] as [number, number] : [170, 85] as [number, number] }
     const dx = Math.abs(preview.end[0] - preview.start[0]); const dy = Math.abs(preview.end[1] - preview.start[1])
     return <section className="sketch-workflow">
-      <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
+      <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
       <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
         <button className={tool === 'rectangle' ? 'selected' : ''} type="button" onClick={() => { setTool('rectangle'); setDrag(null) }}>▭ Rectangle</button>
         <button className={tool === 'circle' ? 'selected' : ''} type="button" onClick={() => { setTool('circle'); setDrag(null) }}>○ Circle</button>
@@ -268,7 +277,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
   }
   return <form className="sketch-workflow" onSubmit={(event) => { event.preventDefault(); onBuild() }}>
     <span className="panel-label">Boss-Extrude</span>
-    <div className="sketch-summary"><div><strong>Sketch1</strong><span>{feature.plane} · {feature.profile.type === 'rectangle' ? `${feature.profile.width} × ${feature.profile.height} mm` : `Ø ${feature.profile.radius * 2} mm`}</span></div><button type="button" onClick={() => setStage('sketch')}>Edit sketch</button></div>
+    <div className="sketch-summary"><div><strong>Sketch1</strong><span>{feature.plane}{feature.planeOffset ? ` + ${feature.planeOffset} mm` : ''} · {feature.profile.type === 'rectangle' ? `${feature.profile.width} × ${feature.profile.height} mm` : `Ø ${feature.profile.radius * 2} mm`}</span></div><button type="button" onClick={() => setStage('sketch')}>Edit sketch</button></div>
     {feature.profile.type === 'rectangle' ? <div className="dimension-grid">
       <label><span>Width (mm)</span><input type="number" min="0.01" step="0.01" value={feature.profile.width} onChange={(event) => feature.profile.type === 'rectangle' && replaceFeature({ ...feature, profile: { ...feature.profile, width: Number(event.target.value) } })} /></label>
       <label><span>Height (mm)</span><input type="number" min="0.01" step="0.01" value={feature.profile.height} onChange={(event) => feature.profile.type === 'rectangle' && replaceFeature({ ...feature, profile: { ...feature.profile, height: Number(event.target.value) } })} /></label>

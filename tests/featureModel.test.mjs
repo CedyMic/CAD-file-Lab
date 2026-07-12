@@ -26,6 +26,12 @@ test('supports all principal sketch planes and reversed extrusions', () => {
   }
 })
 
+test('preserves signed offset reference planes', () => {
+  const result = validateCadFeatureModel({ version: 1, features: [{ ...boss, plane: 'XZ', planeOffset: -24.5 }] })
+  assert.equal(result.features[0].planeOffset, -24.5)
+  assert.throws(() => validateCadFeatureModel({ version: 1, features: [{ ...boss, planeOffset: 1_000_001 }] }), /Plane offset/)
+})
+
 test('rejects unsafe or non-buildable histories', () => {
   assert.throws(() => validateCadFeatureModel({ version: 1, features: [] }), /at least one/)
   assert.throws(() => validateCadFeatureModel({ version: 1, features: [{ ...boss, operation: 'cut' }] }), /first feature.*boss/i)

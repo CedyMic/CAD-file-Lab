@@ -1628,3 +1628,5 @@ textarea:focus-visible {
 .dimension-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .sketch-workflow label { display: grid; gap: 4px; color: #d9e6f2; font-size: 11px; font-weight: 600; }
 .sketch-workflow .inline-check { display: flex; align-items: center; }
+.reference-plane-editor { display: grid; gap: 7px; margin: 0; padding: 8px; border: 1px solid #4e6c83; border-radius: 7px; }
+.reference-plane-editor legend { padding: 0 5px; color: #78baff; font-size: 11px; font-weight: 700; }

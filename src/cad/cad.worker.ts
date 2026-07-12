@@ -721,7 +721,7 @@ function makeSketchExtrusion(feature: SketchExtrudeFeature): Solid {
   const drawing = feature.profile.type === 'rectangle'
     ? drawRectangle(feature.profile.width, feature.profile.height)
     : drawCircle(feature.profile.radius)
-  const sketch = drawing.sketchOnPlane(feature.plane)
+  const sketch = drawing.sketchOnPlane(feature.plane, feature.planeOffset ?? 0)
   return sketch.extrude(feature.reversed ? -feature.length : feature.length) as Solid
 }
 
