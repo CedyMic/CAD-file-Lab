@@ -56,6 +56,11 @@ import {
   type DisplaySettings,
 } from './viewer/displaySettings'
 
+import {
+  convertTriangleMesh,
+  type MeshExportFormat,
+} from './cad/meshConversion'
+
 type WorkspaceTool =
   | 'view'
   | 'measure'
@@ -100,10 +105,10 @@ const tools: Array<{
   },
   {
     id: 'export',
-    label: 'Export',
+    label: 'Convert & simplify',
     description:
-      'Export STEP or another CAD format',
-    available: false,
+      'Download the open model as a reduced or full-quality mesh',
+    available: true,
   },
 ]
 
@@ -172,6 +177,10 @@ function App() {
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(() => new Set())
   const [partColors, setPartColors] = useState<Map<string, string>>(() => new Map())
   const [partOpacities, setPartOpacities] = useState<Map<string, number>>(() => new Map())
+  const [exportFormat, setExportFormat] = useState<MeshExportFormat>('stl')
+  const [exportRatio, setExportRatio] = useState(1)
+  const [exportScope, setExportScope] = useState<'selected' | 'visible'>('visible')
+  const [isExporting, setIsExporting] = useState(false)
 
   const [isLoading, setIsLoading] =
     useState(false)
@@ -231,6 +240,40 @@ function App() {
 
   const selectedParts = model?.renderParts.filter((part) => selectedPartIds.has(part.id)) ?? []
   const selectedPart = selectedParts[0] ?? null
+  const visibleParts = model?.renderParts.filter((part) => !hiddenPartIds.has(part.id)) ?? []
+  const exportParts = exportScope === 'selected' ? selectedParts : visibleParts
+  const exportTriangleCount = exportParts.reduce((sum, part) => sum + part.faces.triangles.length / 3, 0)
+  const reducedTriangleCount = exportTriangleCount ? Math.max(1, Math.round(exportTriangleCount * exportRatio)) : 0
+
+  function downloadConvertedMesh() {
+    if (!model || exportParts.length === 0) return
+    setIsExporting(true)
+    setError(null)
+    try {
+      const vertices: number[] = []
+      const triangles: number[] = []
+      for (const part of exportParts) {
+        const vertexOffset = vertices.length / 3
+        vertices.push(...part.faces.vertices)
+        for (const index of part.faces.triangles) triangles.push(index + vertexOffset)
+      }
+      const converted = convertTriangleMesh(
+        { vertices, triangles },
+        { format: exportFormat, reductionRatio: exportRatio, fileName: model.fileName },
+      )
+      const url = URL.createObjectURL(converted.blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = converted.fileName
+      link.click()
+      URL.revokeObjectURL(url)
+      setStatus(`Downloaded ${converted.fileName} with ${converted.triangleCount.toLocaleString()} triangles`)
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'The mesh could not be converted.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   useEffect(() => {
     function handleSelectAllShortcut(event: KeyboardEvent) {
@@ -1165,15 +1208,15 @@ function App() {
           <div>
             <button type="button" disabled><strong>Create</strong><span>New body</span></button>
             <button type="button" disabled><strong>Modify</strong><span>Geometry</span></button>
-            <button type="button" disabled><strong>Simplify</strong><span>Reduce size</span></button>
+            <button type="button" disabled={!model} onClick={() => setActiveTool('export')}><strong>Simplify</strong><span>Reduce size</span></button>
           </div>
         </div>
 
         <div className="ribbon-group">
           <span className="ribbon-group-label">Output</span>
           <div>
-            <button type="button" disabled><strong>Convert</strong><span>3D format</span></button>
-            <button type="button" disabled><strong>Export</strong><span>Download</span></button>
+            <button type="button" disabled={!model} onClick={() => setActiveTool('export')}><strong>Convert</strong><span>3D format</span></button>
+            <button type="button" disabled={!model} onClick={() => setActiveTool('export')}><strong>Export</strong><span>Download</span></button>
           </div>
         </div>
       </nav>
@@ -1584,6 +1627,37 @@ function App() {
 
           {model ? (
             <>
+              {activeTool === 'export' && (
+                <section className="conversion-panel" aria-labelledby="conversion-title">
+                  <span className="panel-label">Local mesh conversion</span>
+                  <h3 id="conversion-title">Convert & simplify</h3>
+                  <p>Your model is processed entirely in this browser and is never uploaded.</p>
+                  <fieldset>
+                    <legend>Bodies to export</legend>
+                    <label><input type="radio" name="export-scope" checked={exportScope === 'visible'} onChange={() => setExportScope('visible')} /> Visible bodies <small>({visibleParts.length}; hidden bodies excluded)</small></label>
+                    <label><input type="radio" name="export-scope" checked={exportScope === 'selected'} onChange={() => setExportScope('selected')} /> Selected bodies <small>({selectedParts.length}; included even if hidden)</small></label>
+                  </fieldset>
+                  <label>
+                    <span>Output format</span>
+                    <select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as MeshExportFormat)}>
+                      <option value="stl">STL (binary)</option>
+                      <option value="obj">OBJ</option>
+                      <option value="ply">PLY</option>
+                    </select>
+                  </label>
+                  <label className="reduction-field">
+                    <span>Triangles retained</span><output>{Math.round(exportRatio * 100)}%</output>
+                    <input type="range" min="0.05" max="1" step="0.05" value={exportRatio} onChange={(event) => setExportRatio(Number(event.target.value))} />
+                  </label>
+                  <div className="triangle-preview"><span>Current</span><strong>{exportTriangleCount.toLocaleString()}</strong><span>Export estimate</span><strong>{reducedTriangleCount.toLocaleString()}</strong></div>
+                  {exportRatio < 0.5 && <p className="conversion-warning" role="alert">Aggressive reduction can remove small holes, curves and other fine geometry. Inspect the exported result before using it.</p>}
+                  <button className="primary-button" type="button" disabled={isExporting || exportParts.length === 0} onClick={downloadConvertedMesh}>
+                    {isExporting ? 'Converting…' : `Download ${exportFormat.toUpperCase()}`}
+                  </button>
+                  {exportParts.length === 0 && <p className="conversion-warning">Choose at least one body for this export scope.</p>}
+                  <small>Mesh conversion approximates exact CAD surfaces. The open model and original file are not changed.</small>
+                </section>
+              )}
               {selectedPart && (
                 <section className="body-properties">
                   <span className="panel-label">
