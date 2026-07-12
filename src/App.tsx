@@ -1236,7 +1236,7 @@ function App() {
         <div className="ribbon-group">
           <span className="ribbon-group-label">Output</span>
           <div>
-            <button type="button" disabled={!model} onClick={() => setActiveTool('convert')}><strong>Convert</strong><span>3D format</span></button>
+            <button type="button" disabled={!model} onClick={() => setActiveTool('convert')}><strong>Convert / Export</strong><span>Choose format</span></button>
           </div>
         </div>
       </nav>
