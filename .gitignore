@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 .wrangler/
 .dev.vars
+
+# Local-only reproducible compliance build inputs and toolchain.
+.compliance-cache/

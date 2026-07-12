@@ -26,7 +26,7 @@ import type {
 import {
   defaultDisplaySettings,
   type DisplaySettings,
-} from './DisplayPanel'
+} from './displaySettings'
 
 export type ViewCommandType =
   | 'fit'
@@ -362,18 +362,24 @@ function CameraController({
       null,
     )
 
-  const {
-    camera,
-    invalidate,
-  } = useThree()
+  const getThreeState =
+    useThree((state) => state.get)
+
+  const invalidate =
+    useThree(
+      (state) => state.invalidate,
+    )
 
   useEffect(() => {
+    const { camera } =
+      getThreeState()
+
     const target =
       new THREE.Vector3(
         ...metrics.target,
       )
 
-    let direction =
+    const direction =
       camera.position
         .clone()
         .sub(target)
@@ -507,8 +513,8 @@ function CameraController({
 
     invalidate()
   }, [
-    camera,
     command,
+    getThreeState,
     invalidate,
     metrics.radius,
     metrics.target,

@@ -10,6 +10,14 @@ import {
   setOC,
 } from 'replicad'
 
+import {
+  validateStepImportFile,
+} from './stepImportFile'
+
+import {
+  createAsyncOperationQueue,
+} from '../storage/operationQueue'
+
 type CadShape =
   Awaited<ReturnType<typeof importSTEP>>
 
@@ -47,10 +55,17 @@ interface RestoreProjectRequest {
   project: SerializedCadProject
 }
 
+interface DisposeBodyRequest {
+  id: string
+  action: 'disposeBody'
+  bodyId: string
+}
+
 type WorkerRequest =
   | ImportStepRequest
   | SerializeProjectRequest
   | RestoreProjectRequest
+  | DisposeBodyRequest
 
 interface ImportedBodyData {
   bodyId: string
@@ -61,9 +76,14 @@ interface ImportedBodyData {
   edges: ReturnType<CadShape['meshEdges']>
 }
 
+interface DisposedBodyData {
+  disposedBodyId: string
+}
+
 type WorkerData =
   | ImportedBodyData
   | SerializedCadProject
+  | DisposedBodyData
 
 interface WorkerSuccess {
   id: string
@@ -95,8 +115,91 @@ const bodies =
 const bodyFileNames =
   new Map<string, string>()
 
+const enqueueCadOperation =
+  createAsyncOperationQueue()
+
 let initializationPromise:
   Promise<void> | null = null
+
+interface KernelRuntimeConfig {
+  wasmUrl?: unknown
+}
+
+async function getKernelWasmUrl(): Promise<string> {
+  const baseUrl = new URL(
+    import.meta.env.BASE_URL,
+    self.location.origin,
+  )
+
+  const configUrl = new URL(
+    'occt-kernel.json',
+    baseUrl,
+  )
+
+  let response: Response
+
+  try {
+    response = await fetch(
+      configUrl,
+      {
+        cache: 'no-store',
+      },
+    )
+  } catch {
+    return opencascadeWasm
+  }
+
+  if (response.status === 404) {
+    return opencascadeWasm
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `The OCCT kernel configuration could not be loaded (${response.status}).`,
+    )
+  }
+
+  let config: KernelRuntimeConfig
+
+  try {
+    config =
+      await response.json() as KernelRuntimeConfig
+  } catch {
+    throw new Error(
+      'The OCCT kernel configuration is not valid JSON.',
+    )
+  }
+
+  if (
+    config.wasmUrl === undefined ||
+    config.wasmUrl === null ||
+    config.wasmUrl === ''
+  ) {
+    return opencascadeWasm
+  }
+
+  if (typeof config.wasmUrl !== 'string') {
+    throw new Error(
+      'The OCCT kernel configuration has an invalid wasmUrl.',
+    )
+  }
+
+  const configuredUrl = new URL(
+    config.wasmUrl,
+    configUrl,
+  )
+
+  if (
+    configuredUrl.origin !==
+    self.location.origin
+  ) {
+    throw new Error(
+      'The replacement OCCT kernel must be hosted on the same origin.',
+    )
+  }
+
+  return configuredUrl.href
+}
 
 function initializeCadKernel(): Promise<void> {
   if (!initializationPromise) {
@@ -105,13 +208,16 @@ function initializeCadKernel(): Promise<void> {
         opencascadeFactory as unknown as
           OpenCascadeFactory
 
+      const kernelWasmUrl =
+        await getKernelWasmUrl()
+
       const openCascade =
         await createOpenCascade({
           locateFile: (fileName) => {
             if (
               fileName.endsWith('.wasm')
             ) {
-              return opencascadeWasm
+              return kernelWasmUrl
             }
 
             return fileName
@@ -137,18 +243,6 @@ function getErrorMessage(
   }
 
   return 'The CAD operation failed for an unknown reason.'
-}
-
-function getFileExtension(
-  fileName: string,
-): string {
-  return (
-    fileName
-      .split('.')
-      .pop()
-      ?.trim()
-      .toLowerCase() ?? ''
-  )
 }
 
 function getBody(
@@ -189,23 +283,7 @@ function createRenderData(
 async function importStepFile(
   file: File,
 ): Promise<ImportedBodyData> {
-  const extension =
-    getFileExtension(file.name)
-
-  if (
-    extension !== 'step' &&
-    extension !== 'stp'
-  ) {
-    throw new Error(
-      'The editable CAD importer currently accepts STEP and STP files.',
-    )
-  }
-
-  if (file.size === 0) {
-    throw new Error(
-      'The selected CAD file is empty.',
-    )
-  }
+  validateStepImportFile(file)
 
   await initializeCadKernel()
 
@@ -215,13 +293,7 @@ async function importStepFile(
   const bodyId =
     crypto.randomUUID()
 
-  bodies.set(bodyId, shape)
-  bodyFileNames.set(
-    bodyId,
-    file.name,
-  )
-
-  return createRenderData(
+  return registerBodyAfterMeshing(
     bodyId,
     file.name,
     shape,
@@ -303,28 +375,59 @@ async function restoreProject(
     )
   }
 
-  const existingShape =
-    bodies.get(project.bodyId)
+  return registerBodyAfterMeshing(
+    project.bodyId,
+    project.fileName,
+    restoredShape,
+  )
+}
 
-  if (existingShape) {
-    existingShape.delete()
+function disposeBody(
+  bodyId: string,
+): DisposedBodyData {
+  const shape = bodies.get(bodyId)
+
+  try {
+    shape?.delete()
+  } finally {
+    bodies.delete(bodyId)
+    bodyFileNames.delete(bodyId)
   }
 
-  bodies.set(
-    project.bodyId,
-    restoredShape,
-  )
+  return {
+    disposedBodyId: bodyId,
+  }
+}
 
-  bodyFileNames.set(
-    project.bodyId,
-    project.fileName,
-  )
+function registerBodyAfterMeshing(
+  bodyId: string,
+  fileName: string,
+  shape: CadShape,
+): ImportedBodyData {
+  if (bodies.has(bodyId)) {
+    shape.delete()
 
-  return createRenderData(
-    project.bodyId,
-    project.fileName,
-    restoredShape,
-  )
+    throw new Error(
+      'The CAD body ID is already in use.',
+    )
+  }
+
+  try {
+    const renderData = createRenderData(
+      bodyId,
+      fileName,
+      shape,
+    )
+
+    bodies.set(bodyId, shape)
+    bodyFileNames.set(bodyId, fileName)
+
+    return renderData
+  } catch (error) {
+    shape.delete()
+
+    throw error
+  }
 }
 
 async function handleRequest(
@@ -346,6 +449,11 @@ async function handleRequest(
         request.project,
       )
 
+    case 'disposeBody':
+      return disposeBody(
+        request.bodyId,
+      )
+
     default:
       throw new Error(
         'Unsupported CAD worker action.',
@@ -353,26 +461,30 @@ async function handleRequest(
   }
 }
 
-workerScope.onmessage = async (
+workerScope.onmessage = (
   event: MessageEvent<WorkerRequest>,
 ) => {
   const request = event.data
 
-  try {
-    const data =
-      await handleRequest(request)
+  void enqueueCadOperation(
+    async () => {
+      try {
+        const data =
+          await handleRequest(request)
 
-    workerScope.postMessage({
-      id: request.id,
-      ok: true,
-      data,
-    })
-  } catch (error) {
-    workerScope.postMessage({
-      id: request.id,
-      ok: false,
-      error:
-        getErrorMessage(error),
-    })
-  }
+        workerScope.postMessage({
+          id: request.id,
+          ok: true,
+          data,
+        })
+      } catch (error) {
+        workerScope.postMessage({
+          id: request.id,
+          ok: false,
+          error:
+            getErrorMessage(error),
+        })
+      }
+    },
+  )
 }

@@ -43,14 +43,26 @@ interface RestoreProjectRequest {
   project: SerializedCadProject
 }
 
+interface DisposeBodyRequest {
+  id: string
+  action: 'disposeBody'
+  bodyId: string
+}
+
 type WorkerRequest =
   | ImportStepRequest
   | SerializeProjectRequest
   | RestoreProjectRequest
+  | DisposeBodyRequest
+
+interface DisposedCadBody {
+  disposedBodyId: string
+}
 
 type WorkerData =
   | ImportedCadBody
   | SerializedCadProject
+  | DisposedCadBody
 
 interface WorkerSuccess {
   id: string
@@ -103,6 +115,15 @@ function isSerializedCadProject(
     'serializedShape' in data &&
     data.version === 1 &&
     typeof data.bodyId === 'string'
+  )
+}
+
+function isDisposedCadBody(
+  data: WorkerData,
+): data is DisposedCadBody {
+  return (
+    'disposedBodyId' in data &&
+    typeof data.disposedBodyId === 'string'
   )
 }
 
@@ -226,4 +247,24 @@ export async function restoreCadProject(
   }
 
   return response
+}
+
+export async function disposeCadBody(
+  bodyId: string,
+): Promise<void> {
+  const response =
+    await sendRequest({
+      id: crypto.randomUUID(),
+      action: 'disposeBody',
+      bodyId,
+    })
+
+  if (
+    !isDisposedCadBody(response) ||
+    response.disposedBodyId !== bodyId
+  ) {
+    throw new Error(
+      'The CAD worker could not release the model.',
+    )
+  }
 }

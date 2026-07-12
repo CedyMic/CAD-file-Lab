@@ -10,7 +10,7 @@ import type {
 
 import type {
   DisplaySettings,
-} from '../viewer/DisplayPanel'
+} from '../viewer/displaySettings'
 
 export interface CadRecoveryRecord {
   id: string
