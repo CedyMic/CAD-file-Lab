@@ -1272,12 +1272,34 @@ function App() {
               }
             />
 
+            {!model && !isLoading && (
+              <section className="empty-workspace" aria-labelledby="empty-workspace-title">
+                <span className="empty-workspace-kicker">Start a workspace</span>
+                <h2 id="empty-workspace-title">Open your first 3D file</h2>
+                <p>
+                  Inspect a model directly in your browser. Nothing is uploaded,
+                  and you do not need CAD experience to get started.
+                </p>
+                <button className="primary-button" type="button" onClick={openFilePicker}>
+                  Choose a 3D file
+                </button>
+                <span className="format-note">
+                  Available now: STEP and STP · Up to 256 MiB
+                </span>
+                <ol className="getting-started-steps">
+                  <li><strong>Open</strong><span>Choose or drop a supported file</span></li>
+                  <li><strong>Inspect</strong><span>Orbit, zoom, pan and fit the model</span></li>
+                  <li><strong>Save</strong><span>Download a portable CAD Lab project</span></li>
+                </ol>
+              </section>
+            )}
+
             <div className="viewer-hint">
               <strong>
                 {isLoading
                   ? 'Processing CAD model…'
                   : fileName ??
-                    'Test model'}
+                    'No model open'}
               </strong>
 
               <span>
