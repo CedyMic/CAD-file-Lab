@@ -4,6 +4,7 @@ export type MeasurementNormal = readonly [number, number, number]
 export interface FaceSample {
   point: MeasurementPoint
   normal: MeasurementNormal
+  triangle?: readonly [MeasurementPoint, MeasurementPoint, MeasurementPoint]
 }
 
 export interface DistanceMeasurement {
@@ -45,6 +46,14 @@ export function pointToPointDistance(
     second[1] - first[1],
     second[2] - first[2],
   )
+}
+
+export function coordinateDeltas(first: MeasurementPoint, second: MeasurementPoint): MeasurementPoint {
+  return [
+    second[0] - first[0],
+    second[1] - first[1],
+    second[2] - first[2],
+  ]
 }
 
 export function getDistanceMillimetres(

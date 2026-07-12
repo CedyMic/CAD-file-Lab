@@ -344,6 +344,12 @@ function App() {
     setHiddenPartIds(new Set())
     setPartColors(new Map())
     setPartOpacities(new Map())
+    if (nextModel.primitive) {
+      setPrimitiveDefinition(nextModel.primitive)
+      setPrimitiveBodyId(nextModel.bodyId)
+    } else {
+      setPrimitiveBodyId(null)
+    }
   }
 
   function togglePartVisibility(partId: string) {
@@ -1709,12 +1715,21 @@ function App() {
                 <span>Primitive</span>
                 <select
                   value={primitiveDefinition.type}
-                  onChange={(event) => setPrimitiveDefinition(event.target.value === 'box'
-                    ? { type: 'box', width: 100, depth: 80, height: 20 }
-                    : { type: 'cylinder', radius: 40, height: 60 })}
+                  onChange={(event) => {
+                    const type = event.target.value
+                    setPrimitiveDefinition(type === 'box'
+                      ? { type: 'box', width: 100, depth: 80, height: 20 }
+                      : type === 'cylinder'
+                        ? { type: 'cylinder', radius: 40, height: 60 }
+                        : type === 'sphere'
+                          ? { type: 'sphere', radius: 40 }
+                          : { type: 'cone', baseRadius: 40, topRadius: 0, height: 60 })
+                  }}
                 >
                   <option value="box">Box</option>
                   <option value="cylinder">Cylinder</option>
+                  <option value="sphere">Sphere</option>
+                  <option value="cone">Cone / frustum</option>
                 </select>
               </label>
               {primitiveDefinition.type === 'box' ? (
@@ -1727,12 +1742,28 @@ function App() {
                     </label>
                   ))}
                 </>
-              ) : (
+              ) : primitiveDefinition.type === 'cylinder' ? (
                 <>
                   {(['radius', 'height'] as const).map((dimension) => (
                     <label key={dimension}>
                       <span>{dimension[0].toUpperCase() + dimension.slice(1)} (mm)</span>
                       <input type="number" min="0.01" max="1000000" step="0.01" required value={primitiveDefinition[dimension]}
+                        onChange={(event) => setPrimitiveDefinition({ ...primitiveDefinition, [dimension]: Number(event.target.value) })} />
+                    </label>
+                  ))}
+                </>
+              ) : primitiveDefinition.type === 'sphere' ? (
+                <label>
+                  <span>Radius (mm)</span>
+                  <input type="number" min="0.01" max="1000000" step="0.01" required value={primitiveDefinition.radius}
+                    onChange={(event) => setPrimitiveDefinition({ ...primitiveDefinition, radius: Number(event.target.value) })} />
+                </label>
+              ) : (
+                <>
+                  {(['baseRadius', 'topRadius', 'height'] as const).map((dimension) => (
+                    <label key={dimension}>
+                      <span>{dimension === 'baseRadius' ? 'Base radius' : dimension === 'topRadius' ? 'Top radius' : 'Height'} (mm)</span>
+                      <input type="number" min={dimension === 'topRadius' ? 0 : 0.01} max="1000000" step="0.01" required value={primitiveDefinition[dimension]}
                         onChange={(event) => setPrimitiveDefinition({ ...primitiveDefinition, [dimension]: Number(event.target.value) })} />
                     </label>
                   ))}

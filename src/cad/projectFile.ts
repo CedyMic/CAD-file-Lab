@@ -1,6 +1,7 @@
 import type {
   SerializedCadProject,
 } from './cadClient'
+import { validateCadPrimitive } from './primitive.ts'
 
 import type {
   DisplaySettings,
@@ -99,7 +100,7 @@ function isSerializedProject(
     return false
   }
 
-  return (
+  const coreIsValid = (
     value.version === 1 &&
     typeof value.bodyId === 'string' &&
     value.bodyId.length > 0 &&
@@ -112,6 +113,14 @@ function isSerializedProject(
     isFiniteNumber(value.savedAt) &&
     value.savedAt > 0
   )
+  if (!coreIsValid) return false
+  if (value.primitive === undefined) return true
+  try {
+    validateCadPrimitive(value.primitive as never)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function createCadLabProjectFile(

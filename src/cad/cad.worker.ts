@@ -9,8 +9,10 @@ import { DOMParser as XmlDomParser } from '@xmldom/xmldom'
 import {
   deserializeShape,
   importSTEP,
+  drawCircle,
   makeBox,
   makeCylinder,
+  makeSphere,
   setOC,
   Solid,
 } from 'replicad'
@@ -56,6 +58,7 @@ export interface SerializedCadProject {
   fileName: string
   serializedShape: string
   savedAt: number
+  primitive?: CadPrimitive
 }
 
 interface ImportStepRequest {
@@ -111,6 +114,7 @@ interface ImportedBodyData {
   faces: ReturnType<CadShape['mesh']>
 
   edges: ReturnType<CadShape['meshEdges']>
+  primitive?: CadPrimitive
 }
 
 interface DisposedBodyData {
@@ -151,6 +155,9 @@ const bodies =
 
 const bodyFileNames =
   new Map<string, string>()
+
+const bodyPrimitives =
+  new Map<string, CadPrimitive>()
 
 const enqueueCadOperation =
   createAsyncOperationQueue()
@@ -544,6 +551,7 @@ function serializeProject(
     serializedShape:
       shape.serialize(),
     savedAt: Date.now(),
+    primitive: bodyPrimitives.get(bodyId),
   }
 }
 
@@ -602,11 +610,16 @@ async function restoreProject(
     )
   }
 
-  return registerBodyAfterMeshing(
+  const body = registerBodyAfterMeshing(
     project.bodyId,
     project.fileName,
     restoredShape,
   )
+  const primitive = project.primitive
+    ? validateCadPrimitive(project.primitive)
+    : undefined
+  if (primitive) bodyPrimitives.set(project.bodyId, primitive)
+  return primitive ? { ...body, primitive } : body
 }
 
 function disposeBody(
@@ -619,6 +632,7 @@ function disposeBody(
   } finally {
     bodies.delete(bodyId)
     bodyFileNames.delete(bodyId)
+    bodyPrimitives.delete(bodyId)
   }
 
   return {
@@ -634,17 +648,32 @@ function makePrimitiveShape(primitiveInput: CadPrimitive): CadShape {
       [primitive.width / 2, primitive.depth / 2, primitive.height],
     )
   }
-  return makeCylinder(primitive.radius, primitive.height)
+  if (primitive.type === 'cylinder') {
+    return makeCylinder(primitive.radius, primitive.height)
+  }
+  if (primitive.type === 'sphere') {
+    return makeSphere(primitive.radius)
+  }
+  const sketch = drawCircle(primitive.baseRadius).sketchOnPlane('XY')
+  return sketch.extrude(primitive.height, {
+    extrusionProfile: {
+      profile: 'linear',
+      endFactor: primitive.topRadius / primitive.baseRadius,
+    },
+  }) as CadShape
 }
 
 async function createPrimitive(primitiveInput: CadPrimitive): Promise<ImportedBodyData> {
   const primitive = validateCadPrimitive(primitiveInput)
   await initializeCadKernel()
-  return registerBodyAfterMeshing(
-    crypto.randomUUID(),
+  const bodyId = crypto.randomUUID()
+  const body = registerBodyAfterMeshing(
+    bodyId,
     getPrimitiveFileName(primitive),
     makePrimitiveShape(primitive),
   )
+  bodyPrimitives.set(bodyId, primitive)
+  return { ...body, primitive }
 }
 
 async function updatePrimitive(
@@ -662,8 +691,9 @@ async function updatePrimitive(
     const previous = bodies.get(bodyId)
     bodies.set(bodyId, replacement)
     bodyFileNames.set(bodyId, fileName)
+    bodyPrimitives.set(bodyId, primitive)
     previous?.delete()
-    return renderData
+    return { ...renderData, primitive }
   } catch (error) {
     replacement.delete()
     throw error

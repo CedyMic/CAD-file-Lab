@@ -66,6 +66,15 @@ test('creates and parses a versioned project envelope', () => {
   )
 })
 
+test('preserves editable primitive parameters and rejects invalid metadata', () => {
+  const file = createValidProjectFile()
+  file.project.primitive = { type: 'cone', baseRadius: 24, topRadius: 6, height: 50 }
+  assert.deepEqual(parseCadLabProjectFile(JSON.stringify(file)).project.primitive, file.project.primitive)
+
+  file.project.primitive = { type: 'sphere', radius: 0 }
+  expectInvalid(file)
+})
+
 test('rejects malformed JSON with a user-facing error', () => {
   assert.throws(
     () => parseCadLabProjectFile('{not-json'),

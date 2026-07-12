@@ -7,12 +7,14 @@ import {
   formatDistanceMillimetres,
   getDistanceMillimetres,
   pointToPointDistance,
+  coordinateDeltas,
   parallelFaceDistance,
   faceAngleDegrees,
 } from '../src/viewer/measurement.ts'
 
 test('calculates a three-dimensional point-to-point distance', () => {
   assert.equal(pointToPointDistance([1, 2, 3], [4, 6, 15]), 13)
+  assert.deepEqual(coordinateDeltas([1, 2, 3], [4, 6, 15]), [3, 4, 12])
 })
 
 test('measures the perpendicular gap between parallel planar faces', () => {

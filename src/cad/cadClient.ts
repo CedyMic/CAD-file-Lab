@@ -30,6 +30,7 @@ export interface ImportedCadBody {
   renderParts: CadRenderPart[]
   faces: CadFaceMesh
   edges: CadEdgeMesh
+  primitive?: CadPrimitive
 }
 
 export interface SerializedCadProject {
@@ -38,6 +39,7 @@ export interface SerializedCadProject {
   fileName: string
   serializedShape: string
   savedAt: number
+  primitive?: CadPrimitive
 }
 
 interface ImportStepRequest {

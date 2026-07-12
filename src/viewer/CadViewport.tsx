@@ -34,6 +34,7 @@ import {
 
 import {
   addDistancePoint,
+  coordinateDeltas,
   emptyDistanceMeasurement,
   faceAngleDegrees,
   formatDistanceMillimetres,
@@ -218,6 +219,7 @@ function ImportedPart({
   opacity,
   onSelect,
   onMeasurePoint,
+  onMeasureLine,
 }: {
   part: CadRenderPart
   settings: DisplaySettings
@@ -227,6 +229,7 @@ function ImportedPart({
   opacity: number
   onSelect: (additive: boolean) => void
   onMeasurePoint?: (sample: FaceSample) => void
+  onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint) => void
 }) {
   const faceGeometry =
     useMemo(() => {
@@ -338,9 +341,17 @@ function ImportedPart({
             const normal = event.face?.normal.clone()
             if (!normal) return
             normal.applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(event.object.matrixWorld))
+            const triangle = event.face
+              ? ([event.face.a, event.face.b, event.face.c].map((index) => {
+                  const vertex = new THREE.Vector3().fromBufferAttribute(faceGeometry.getAttribute('position'), index)
+                  vertex.applyMatrix4(event.object.matrixWorld)
+                  return [vertex.x, vertex.y, vertex.z] as MeasurementPoint
+                }) as [MeasurementPoint, MeasurementPoint, MeasurementPoint])
+              : undefined
             onMeasurePoint({
               point: [event.point.x, event.point.y, event.point.z],
               normal: [normal.x, normal.y, normal.z],
+              triangle,
             })
             return
           }
@@ -367,18 +378,25 @@ function ImportedPart({
         />
       </mesh>
 
-      {showEdges && !isWireframe && (
+      {(showEdges || onMeasureLine) && !isWireframe && (
         <lineSegments
           geometry={edgeGeometry}
+          onClick={(event) => {
+            if (!onMeasureLine) return
+            event.stopPropagation()
+            const position = edgeGeometry.getAttribute('position')
+            const startIndex = Math.max(0, Math.min(event.index ?? 0, position.count - 2))
+            const first = new THREE.Vector3().fromBufferAttribute(position, startIndex).applyMatrix4(event.object.matrixWorld)
+            const second = new THREE.Vector3().fromBufferAttribute(position, startIndex + 1).applyMatrix4(event.object.matrixWorld)
+            onMeasureLine([first.x, first.y, first.z], [second.x, second.y, second.z])
+          }}
         >
           <lineBasicMaterial
             color={settings.edgeColor}
             transparent={
               settings.edgeOpacity < 1
             }
-            opacity={
-              settings.edgeOpacity
-            }
+            opacity={showEdges ? settings.edgeOpacity : 0}
           />
         </lineSegments>
       )}
@@ -406,6 +424,7 @@ function ImportedModel({
   partOpacities,
   onSelectPart,
   onMeasurePoint,
+  onMeasureLine,
 }: {
   model: ImportedCadBody
   settings: DisplaySettings
@@ -415,6 +434,7 @@ function ImportedModel({
   partOpacities: ReadonlyMap<string, number>
   onSelectPart: (partId: string, additive: boolean) => void
   onMeasurePoint?: (sample: FaceSample) => void
+  onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint) => void
 }) {
   const modelPosition = useMemo(() => {
     const positions = convertZUpToYUp(model.faces.vertices)
@@ -443,6 +463,7 @@ function ImportedModel({
             opacity={partOpacities.get(part.id) ?? 1}
             onSelect={(additive) => onSelectPart(part.id, additive)}
             onMeasurePoint={onMeasurePoint}
+            onMeasureLine={onMeasureLine}
           />
         )
       ))}
@@ -453,10 +474,12 @@ function ImportedModel({
 function DistanceAnnotation({
   points,
   faces,
+  kind,
   onReset,
 }: {
   points: readonly MeasurementPoint[]
   faces: readonly FaceSample[]
+  kind: 'points' | 'line'
   onReset: () => void
 }) {
   if (points.length === 0) return null
@@ -478,9 +501,24 @@ function DistanceAnnotation({
   const labelPosition = second
     ? first.clone().add(second).multiplyScalar(0.5)
     : first
+  const worldDeltas = second ? coordinateDeltas(points[0], points[1]) : null
+  const modelDeltas = worldDeltas
+    ? [worldDeltas[0], -worldDeltas[2], worldDeltas[1]] as const
+    : null
 
   return (
     <group>
+      {faces.map((face, index) => face.triangle && (
+        <mesh key={`face-${index}`} renderOrder={19}>
+          <bufferGeometry>
+            <bufferAttribute
+              attach="attributes-position"
+              args={[new Float32Array(face.triangle.flat()), 3]}
+            />
+          </bufferGeometry>
+          <meshBasicMaterial color="#ffad24" transparent opacity={0.42} depthTest={false} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
       <mesh position={first} renderOrder={20}>
         <sphereGeometry args={[0.055, 16, 12]} />
         <meshBasicMaterial color="#21a7ff" depthTest={false} />
@@ -501,12 +539,20 @@ function DistanceAnnotation({
       )}
       <Html position={labelPosition} center zIndexRange={[40, 0]}>
         <div style={{ background: '#102331ee', border: '1px solid #4380a3', borderRadius: 4, color: '#eef8ff', font: '600 12px system-ui', padding: '5px 7px', whiteSpace: 'nowrap', pointerEvents: 'auto' }}>
-          {distance === null ? 'Select second point' : `Points ${formatDistanceMillimetres(distance)}`}
+          <span style={{ display: 'block', marginBottom: 3, color: '#86bddd', fontSize: 10, fontWeight: 600 }}>
+            Selected: {kind === 'line' ? 'Line' : faces.map((_, index) => `Face ${index + 1}`).join(' · ') || `Point ${points.length}`}
+          </span>
+          {distance === null ? 'Select second point' : `${kind === 'line' ? 'Line length' : 'Minimum'} ${formatDistanceMillimetres(distance)}`}
           {distance !== null && (
             <span style={{ marginLeft: 7, color: faceDistance === null ? '#f0c68c' : '#9de0b4' }}>
               {faceDistance === null
                 ? `Face angle ${faceAngle?.toFixed(1)}°`
                 : `Face gap ${formatDistanceMillimetres(faceDistance)}`}
+            </span>
+          )}
+          {modelDeltas && (
+            <span style={{ display: 'block', marginTop: 3, color: '#b9d2e2', fontWeight: 500 }}>
+              ΔX {formatDistanceMillimetres(Math.abs(modelDeltas[0]))} · ΔY {formatDistanceMillimetres(Math.abs(modelDeltas[1]))} · ΔZ {formatDistanceMillimetres(Math.abs(modelDeltas[2]))}
             </span>
           )}
           <button type="button" onClick={onReset} aria-label="Clear measurement" style={{ background: 'transparent', border: 0, color: '#9dc8df', cursor: 'pointer', marginLeft: 7, padding: 0 }}>×</button>
@@ -536,11 +582,12 @@ function MeasurableImportedModel({
   const [measurement, setMeasurement] = useState({
     distance: emptyDistanceMeasurement,
     faces: [] as FaceSample[],
+    kind: 'points' as 'points' | 'line',
   })
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMeasurement({ distance: emptyDistanceMeasurement, faces: [] })
+      if (event.key === 'Escape') setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points' })
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -558,18 +605,30 @@ function MeasurableImportedModel({
         onSelectPart={onSelectPart}
         onMeasurePoint={(sample) => {
           setMeasurement((current) => {
+            const existing = current.faces.length === 1 ? current.faces[0] : null
+            const sameFace = existing?.triangle && sample.triangle && existing.triangle.every(
+              (point, pointIndex) => point.every(
+                (value, axis) => Math.abs(value - sample.triangle![pointIndex][axis]) < 1e-7,
+              ),
+            )
+            if (sameFace) return { distance: emptyDistanceMeasurement, faces: [], kind: 'points' }
             const restart = current.distance.points.length >= 2
             return {
               distance: addDistancePoint(current.distance, sample.point),
               faces: restart ? [sample] : [...current.faces, sample],
+              kind: 'points',
             }
           })
+        }}
+        onMeasureLine={(first, second) => {
+          setMeasurement({ distance: { points: [first, second] }, faces: [], kind: 'line' })
         }}
       />
       <DistanceAnnotation
         points={measurement.distance.points}
         faces={measurement.faces}
-        onReset={() => setMeasurement({ distance: emptyDistanceMeasurement, faces: [] })}
+        kind={measurement.kind}
+        onReset={() => setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points' })}
       />
     </>
   )
@@ -770,6 +829,7 @@ export function CadViewport({
   onClearSelection = () => undefined,
   measurementEnabled = false,
 }: CadViewportProps) {
+  const [measurementResetId, setMeasurementResetId] = useState(0)
   const lightStrength =
     settings.brightness
 
@@ -814,7 +874,10 @@ export function CadViewport({
         gl.toneMappingExposure = 1.05
         gl.outputColorSpace = THREE.SRGBColorSpace
       }}
-      onPointerMissed={() => onClearSelection()}
+      onPointerMissed={() => {
+        onClearSelection()
+        if (measurementEnabled) setMeasurementResetId((current) => current + 1)
+      }}
     >
       <color
         attach="background"
@@ -899,7 +962,7 @@ export function CadViewport({
         <>
           {measurementEnabled ? (
             <MeasurableImportedModel
-              key={model.bodyId}
+              key={`${model.bodyId}-${measurementResetId}`}
               model={model}
               settings={settings}
               hiddenPartIds={hiddenPartIds}
