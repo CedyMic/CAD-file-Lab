@@ -1270,8 +1270,20 @@ function App() {
               }
             />
 
+            {error && (
+              <div className="viewport-error" role="alert">
+                <strong>Could not complete the operation</strong>
+                <span>{error}</span>
+              </div>
+            )}
+
             {!model && !isLoading && (
               <section className="empty-workspace" aria-labelledby="empty-workspace-title">
+                <div className="start-scope">
+                  <span>Your private 3D workspace</span>
+                  <h2>What would you like to do?</h2>
+                  <p>View, create, assemble, convert and simplify locally. Your files stay on this device.</p>
+                </div>
                 <span className="empty-workspace-kicker">Your private 3D workspace</span>
                 <h2 id="empty-workspace-title">View, modify and create—locally</h2>
                 <p>
@@ -1281,6 +1293,33 @@ function App() {
                 <button className="primary-button" type="button" onClick={openFilePicker}>
                   Choose a 3D file
                 </button>
+                <div className="start-actions">
+                  <article>
+                    <strong>View 3D file</strong>
+                    <span>Inspect a model privately</span>
+                    <button type="button" onClick={openFilePicker}>Choose 3D file</button>
+                  </article>
+                  <article>
+                    <strong>Create 3D file</strong>
+                    <span>Design a new parametric part</span>
+                    <button type="button" disabled>Create part · Coming next</button>
+                  </article>
+                  <article>
+                    <strong>Create assembly</strong>
+                    <span>Combine and position components</span>
+                    <button type="button" disabled>New assembly · Planned</button>
+                  </article>
+                  <article>
+                    <strong>Convert file</strong>
+                    <span>Change to another 3D format</span>
+                    <button type="button" disabled>Choose file · Coming next</button>
+                  </article>
+                  <article>
+                    <strong>Reduce file size</strong>
+                    <span>Simplify CAD or mesh geometry</span>
+                    <button type="button" disabled>Choose file · Coming next</button>
+                  </article>
+                </div>
                 <div className="format-support" aria-label="Supported 3D file formats">
                   <strong>Supported formats</strong>
                   <div className="format-badges">
@@ -1295,6 +1334,15 @@ function App() {
                   <li><strong>Inspect</strong><span>Orbit, zoom, pan and fit the model</span></li>
                   <li><strong>Save</strong><span>Download a portable CAD Lab project</span></li>
                 </ol>
+                {latestRecovery && (
+                  <button className="recovery-link" type="button" onClick={() => void recoverLatestProject()}>
+                    Continue recovered project: {latestRecovery.project.fileName}
+                  </button>
+                )}
+                <aside className="start-ad-slot" aria-label="Advertisement">
+                  <span>Advertisement</span>
+                  <p>Reserved for privacy-respecting contextual sponsorship.</p>
+                </aside>
               </section>
             )}
 
