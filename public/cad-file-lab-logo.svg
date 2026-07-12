@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="120" viewBox="0 0 600 120" role="img" aria-labelledby="title desc">
+  <title id="title">CAD File Lab</title>
+  <desc id="desc">Blue CAD File Lab letter C mark followed by the company name.</desc>
+  <defs>
+    <linearGradient id="brand" x1="16" y1="12" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1769e0"/>
+      <stop offset="1" stop-color="#40a3ff"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="104" height="104" rx="25" fill="url(#brand)"/>
+  <path d="M79 38c-5-5-12-8-20-8-17 0-30 13-30 30s13 30 30 30c8 0 15-3 20-8" fill="none" stroke="#fff" stroke-width="13" stroke-linecap="round"/>
+  <path d="M73 60h27M91 51l9 9-9 9" fill="none" stroke="#bfe3ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="136" y="73" fill="#172331" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="46" font-weight="700" letter-spacing="-1">CAD File Lab</text>
+</svg>

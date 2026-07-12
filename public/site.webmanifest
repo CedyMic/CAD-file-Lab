@@ -8,7 +8,7 @@
   "theme_color": "#0f151c",
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "/cad-file-lab-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }

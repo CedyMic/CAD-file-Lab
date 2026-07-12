@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="CAD File Lab">
+  <defs><linearGradient id="brand" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop stop-color="#1769e0"/><stop offset="1" stop-color="#40a3ff"/></linearGradient></defs>
+  <rect x="8" y="8" width="112" height="112" rx="27" fill="url(#brand)"/>
+  <path d="M82 39c-6-6-13-9-22-9-18 0-32 15-32 34s14 34 32 34c9 0 16-3 22-9" fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+  <path d="M75 64h29M94 54l10 10-10 10" fill="none" stroke="#bfe3ff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
