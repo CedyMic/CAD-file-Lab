@@ -11,6 +11,7 @@ import {
   parallelFaceDistance,
   faceAngleDegrees,
   circularPolylineRadius,
+  closestPolylinePoints,
 } from '../src/viewer/measurement.ts'
 
 test('calculates a three-dimensional point-to-point distance', () => {
@@ -52,6 +53,16 @@ test('detects circular closed edge polylines without mislabeling open lines', ()
   }
   assert.ok(Math.abs(circularPolylineRadius(circle) - 5) < 1e-10)
   assert.equal(circularPolylineRadius([[0, 0, 0], [5, 0, 0]]), null)
+})
+
+test('finds the shortest distance between complete edge polylines', () => {
+  const result = closestPolylinePoints(
+    [[0, 0, 0], [10, 0, 0]],
+    [[2, 4, 0], [8, 4, 0]],
+  )
+  assert.equal(result.distance, 4)
+  assert.deepEqual(result.first, [2, 0, 0])
+  assert.deepEqual(result.second, [2, 4, 0])
 })
 
 test('selects two points and starts a fresh measurement on the third', () => {

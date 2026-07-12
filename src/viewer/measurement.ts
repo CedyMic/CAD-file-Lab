@@ -135,3 +135,45 @@ export function circularPolylineRadius(points: readonly MeasurementPoint[]): num
   const maximumError = Math.max(...chain.map((point) => Math.abs(distance(center, point) - radius)))
   return maximumError <= Math.max(radius * 0.01, 1e-4) ? radius : null
 }
+
+export function closestPolylinePoints(
+  first: readonly MeasurementPoint[],
+  second: readonly MeasurementPoint[],
+): { first: MeasurementPoint; second: MeasurementPoint; distance: number } {
+  if (first.length < 2 || second.length < 2) throw new Error('Each edge needs at least one segment.')
+  let best: { first: MeasurementPoint; second: MeasurementPoint; distance: number } | null = null
+  const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+  const sub = (a: MeasurementPoint, b: MeasurementPoint) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+  const addScaled = (point: MeasurementPoint, direction: number[], scale: number): MeasurementPoint => [
+    point[0] + direction[0] * scale, point[1] + direction[1] * scale, point[2] + direction[2] * scale,
+  ]
+  const segments = (points: readonly MeasurementPoint[]) => Array.from(
+    { length: Math.floor(points.length / 2) },
+    (_, index) => [points[index * 2], points[index * 2 + 1]] as const,
+  )
+  for (const [p1, q1] of segments(first)) for (const [p2, q2] of segments(second)) {
+    const d1 = sub(q1, p1); const d2 = sub(q2, p2); const r = sub(p1, p2)
+    const a = dot(d1, d1); const e = dot(d2, d2); const f = dot(d2, r)
+    let s = 0; let t = 0
+    if (a <= 1e-15 && e <= 1e-15) {
+      s = 0; t = 0
+    } else if (a <= 1e-15) {
+      t = Math.min(1, Math.max(0, f / e))
+    } else {
+      const c = dot(d1, r)
+      if (e <= 1e-15) s = Math.min(1, Math.max(0, -c / a))
+      else {
+        const b = dot(d1, d2); const denominator = a * e - b * b
+        if (denominator !== 0) s = Math.min(1, Math.max(0, (b * f - c * e) / denominator))
+        t = (b * s + f) / e
+        if (t < 0) { t = 0; s = Math.min(1, Math.max(0, -c / a)) }
+        else if (t > 1) { t = 1; s = Math.min(1, Math.max(0, (b - c) / a)) }
+      }
+    }
+    const pointA = addScaled(p1, d1, s); const pointB = addScaled(p2, d2, t)
+    const distance = pointToPointDistance(pointA, pointB)
+    if (!best || distance < best.distance) best = { first: pointA, second: pointB, distance }
+  }
+  if (!best) throw new Error('The selected edges contain no measurable segments.')
+  return best
+}

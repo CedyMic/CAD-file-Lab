@@ -34,6 +34,7 @@ import {
 
 import {
   addDistancePoint,
+  closestPolylinePoints,
   coordinateDeltas,
   circularPolylineRadius,
   emptyDistanceMeasurement,
@@ -607,11 +608,23 @@ function MeasurableImportedModel({
     lineLength: undefined as number | undefined,
     radius: undefined as number | undefined,
     lineEntityId: undefined as string | undefined,
+    lineSelections: [] as Array<{ id: string; vertices: MeasurementPoint[]; length: number; radius?: number }>,
+  })
+
+  const emptyMeasurement = () => ({
+    distance: emptyDistanceMeasurement,
+    faces: [] as FaceSample[],
+    kind: 'points' as const,
+    lineVertices: [] as MeasurementPoint[],
+    lineLength: undefined,
+    radius: undefined,
+    lineEntityId: undefined,
+    lineSelections: [] as Array<{ id: string; vertices: MeasurementPoint[]; length: number; radius?: number }>,
   })
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined, lineEntityId: undefined })
+      if (event.key === 'Escape') setMeasurement(emptyMeasurement())
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -622,7 +635,7 @@ function MeasurableImportedModel({
     if (points.length !== 2) {
       onMeasurementChange?.({
         selections: measurement.kind === 'line'
-          ? ['Line']
+          ? measurement.lineSelections.map((_, index) => `Edge ${index + 1}`)
           : measurement.faces.length
             ? measurement.faces.map((_, index) => `Face ${index + 1}`)
             : points.map((_, index) => `Point ${index + 1}`),
@@ -635,11 +648,13 @@ function MeasurableImportedModel({
       : null
     onMeasurementChange?.({
       selections: measurement.kind === 'line'
-        ? ['Line']
+        ? measurement.lineSelections.map((_, index) => `Edge ${index + 1}`)
         : measurement.faces.length
           ? measurement.faces.map((_, index) => `Face ${index + 1}`)
           : points.map((_, index) => `Point ${index + 1}`),
-      distance: getDistanceMillimetres(measurement.distance) ?? undefined,
+      distance: measurement.kind !== 'line' || measurement.lineSelections.length === 2
+        ? getDistanceMillimetres(measurement.distance) ?? undefined
+        : undefined,
       deltaX: world[0],
       deltaY: -world[2],
       deltaZ: world[1],
@@ -669,7 +684,7 @@ function MeasurableImportedModel({
             const existing = current.faces.length === 1 ? current.faces[0] : null
             if (measurementMode === 'face' && !sample.entityId) return current
             const sameFace = Boolean(existing?.entityId && sample.entityId && existing.entityId === sample.entityId)
-            if (sameFace) return { distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined, lineEntityId: undefined }
+            if (sameFace) return emptyMeasurement()
             const restart = current.distance.points.length >= 2
             return {
               distance: addDistancePoint(current.distance, sample.point),
@@ -679,13 +694,38 @@ function MeasurableImportedModel({
               lineLength: undefined,
               radius: undefined,
               lineEntityId: undefined,
+              lineSelections: [],
             }
           })
         }}
         onMeasureLine={(first, second, vertices, length, entityId) => {
-          setMeasurement((current) => current.lineEntityId === entityId
-            ? { distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined, lineEntityId: undefined }
-            : { distance: { points: [first, second] }, faces: [], kind: 'line', lineVertices: vertices, lineLength: length, radius: circularPolylineRadius(vertices) ?? undefined, lineEntityId: entityId })
+          setMeasurement((current) => {
+            const existingIndex = current.lineSelections.findIndex((edge) => edge.id === entityId)
+            if (existingIndex >= 0) {
+              const remaining = current.lineSelections.filter((_, index) => index !== existingIndex)
+              if (!remaining.length) return emptyMeasurement()
+              const edge = remaining[0]
+              return {
+                distance: { points: [edge.vertices[0], edge.vertices[edge.vertices.length - 1]] },
+                faces: [], kind: 'line', lineVertices: edge.vertices, lineLength: edge.length,
+                radius: edge.radius, lineEntityId: edge.id, lineSelections: remaining,
+              }
+            }
+            const edge = { id: entityId, vertices, length, radius: circularPolylineRadius(vertices) ?? undefined }
+            if (current.kind === 'line' && current.lineSelections.length === 1) {
+              const edges = [current.lineSelections[0], edge]
+              const closest = closestPolylinePoints(edges[0].vertices, edges[1].vertices)
+              return {
+                distance: { points: [closest.first, closest.second] }, faces: [], kind: 'line',
+                lineVertices: [...edges[0].vertices, ...edges[1].vertices], lineLength: undefined,
+                radius: undefined, lineEntityId: undefined, lineSelections: edges,
+              }
+            }
+            return {
+              distance: { points: [first, second] }, faces: [], kind: 'line', lineVertices: vertices,
+              lineLength: length, radius: edge.radius, lineEntityId: entityId, lineSelections: [edge],
+            }
+          })
         }}
       />
       <DistanceAnnotation
