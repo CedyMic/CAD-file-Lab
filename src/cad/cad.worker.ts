@@ -9,6 +9,8 @@ import { DOMParser as XmlDomParser } from '@xmldom/xmldom'
 import {
   deserializeShape,
   importSTEP,
+  makeBox,
+  makeCylinder,
   setOC,
   Solid,
 } from 'replicad'
@@ -28,6 +30,8 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import {
   validateStepImportFile,
 } from './stepImportFile'
+
+import { getPrimitiveFileName, validateCadPrimitive, type CadPrimitive } from './primitive'
 
 import {
   createAsyncOperationQueue,
@@ -78,10 +82,15 @@ interface DisposeBodyRequest {
   bodyId: string
 }
 
+interface CreatePrimitiveRequest { id: string; action: 'createPrimitive'; primitive: CadPrimitive }
+interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId: string; primitive: CadPrimitive }
+
 type WorkerRequest =
   | ImportStepRequest
   | SerializeProjectRequest
   | RestoreProjectRequest
+  | CreatePrimitiveRequest
+  | UpdatePrimitiveRequest
   | DisposeBodyRequest
 
 interface ImportedBodyData {
@@ -617,6 +626,50 @@ function disposeBody(
   }
 }
 
+function makePrimitiveShape(primitiveInput: CadPrimitive): CadShape {
+  const primitive = validateCadPrimitive(primitiveInput)
+  if (primitive.type === 'box') {
+    return makeBox(
+      [-primitive.width / 2, -primitive.depth / 2, 0],
+      [primitive.width / 2, primitive.depth / 2, primitive.height],
+    )
+  }
+  return makeCylinder(primitive.radius, primitive.height)
+}
+
+async function createPrimitive(primitiveInput: CadPrimitive): Promise<ImportedBodyData> {
+  const primitive = validateCadPrimitive(primitiveInput)
+  await initializeCadKernel()
+  return registerBodyAfterMeshing(
+    crypto.randomUUID(),
+    getPrimitiveFileName(primitive),
+    makePrimitiveShape(primitive),
+  )
+}
+
+async function updatePrimitive(
+  bodyId: string,
+  primitiveInput: CadPrimitive,
+): Promise<ImportedBodyData> {
+  getBody(bodyId)
+  const primitive = validateCadPrimitive(primitiveInput)
+  await initializeCadKernel()
+  const replacement = makePrimitiveShape(primitive)
+  const fileName = getPrimitiveFileName(primitive)
+
+  try {
+    const renderData = createRenderData(bodyId, fileName, replacement)
+    const previous = bodies.get(bodyId)
+    bodies.set(bodyId, replacement)
+    bodyFileNames.set(bodyId, fileName)
+    previous?.delete()
+    return renderData
+  } catch (error) {
+    replacement.delete()
+    throw error
+  }
+}
+
 function registerBodyAfterMeshing(
   bodyId: string,
   fileName: string,
@@ -666,6 +719,12 @@ async function handleRequest(
       return restoreProject(
         request.project,
       )
+
+    case 'createPrimitive':
+      return createPrimitive(request.primitive)
+
+    case 'updatePrimitive':
+      return updatePrimitive(request.bodyId, request.primitive)
 
     case 'disposeBody':
       return disposeBody(

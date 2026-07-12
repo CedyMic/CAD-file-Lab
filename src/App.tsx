@@ -12,11 +12,14 @@ import { LandingPage } from './marketing/LandingPage'
 
 import {
   disposeCadBody,
+  createCadPrimitive,
   importStepFile,
   restoreCadProject,
   serializeCadProject,
+  updateCadPrimitive,
   type ImportedCadBody,
 } from './cad/cadClient'
+import type { CadPrimitive } from './cad/primitive'
 
 import {
   CAD_LAB_PROJECT_EXTENSION,
@@ -70,6 +73,7 @@ import {
 
 type WorkspaceTool =
   | 'view'
+  | 'create'
   | 'measure'
   | 'section'
   | 'modify'
@@ -97,6 +101,12 @@ const tools: Array<{
     label: 'View',
     description:
       'Orbit, pan, zoom and inspect the model',
+    available: true,
+  },
+  {
+    id: 'create',
+    label: 'Create',
+    description: 'Create a box or cylinder with exact dimensions',
     available: true,
   },
   {
@@ -192,6 +202,12 @@ function App() {
     useState<ImportedCadBody | null>(
       null,
     )
+
+  const [primitiveDefinition, setPrimitiveDefinition] = useState<CadPrimitive>({
+    type: 'box', width: 100, depth: 80, height: 20,
+  })
+  const [primitiveBodyId, setPrimitiveBodyId] = useState<string | null>(null)
+  const [isCreatingPrimitive, setIsCreatingPrimitive] = useState(false)
 
   const [selectedPartIds, setSelectedPartIds] = useState<Set<string>>(() => new Set())
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(() => new Set())
@@ -385,6 +401,30 @@ function App() {
   function openFilePicker(intent: FileOpenIntent = 'view') {
     fileOpenIntentRef.current = intent
     fileInputRef.current?.click()
+  }
+
+  async function applyPrimitive(): Promise<void> {
+    if (isCreatingPrimitive) return
+    setIsCreatingPrimitive(true)
+    setError(null)
+    try {
+      const previousBodyId = model?.bodyId
+      const nextModel = primitiveBodyId && model?.bodyId === primitiveBodyId
+        ? await updateCadPrimitive(primitiveBodyId, primitiveDefinition)
+        : await createCadPrimitive(primitiveDefinition)
+      installModel(nextModel)
+      setPrimitiveBodyId(nextModel.bodyId)
+      setFileName(nextModel.fileName)
+      setStatus(`${nextModel.fileName} ${previousBodyId === nextModel.bodyId ? 'updated' : 'created'} locally`)
+      await releaseSupersededCadBody(previousBodyId, nextModel.bodyId)
+      await saveImportedModelRecovery(nextModel)
+      window.setTimeout(() => sendViewCommand('fit'), 100)
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'The part could not be created.')
+      setStatus('Part creation failed')
+    } finally {
+      setIsCreatingPrimitive(false)
+    }
   }
 
   function openProjectFilePicker() {
@@ -1243,7 +1283,7 @@ function App() {
         <div className="ribbon-group">
           <span className="ribbon-group-label">Model</span>
           <div>
-            <button type="button" disabled><strong>Create</strong><span>New body</span></button>
+            <button type="button" onClick={() => setActiveTool('create')}><strong>Create</strong><span>New body</span></button>
             <button type="button" disabled><strong>Modify</strong><span>Geometry</span></button>
             <button type="button" disabled={!model} onClick={() => setActiveTool('simplify')}><strong>Simplify</strong><span>Reduce size</span></button>
           </div>
@@ -1562,7 +1602,7 @@ function App() {
                   <article>
                     <strong>Create 3D file</strong>
                     <span>Design a new parametric part</span>
-                    <button type="button" disabled>Create part · Coming next</button>
+                    <button type="button" onClick={() => setActiveTool('create')}>Create part</button>
                   </article>
                   <article>
                     <strong>Create assembly</strong>
@@ -1661,6 +1701,49 @@ function App() {
               </strong>
             </div>
           </header>
+
+          {activeTool === 'create' && (
+            <form className="primitive-panel" onSubmit={(event) => { event.preventDefault(); void applyPrimitive() }}>
+              <span className="panel-label">Local solid creation</span>
+              <label>
+                <span>Primitive</span>
+                <select
+                  value={primitiveDefinition.type}
+                  onChange={(event) => setPrimitiveDefinition(event.target.value === 'box'
+                    ? { type: 'box', width: 100, depth: 80, height: 20 }
+                    : { type: 'cylinder', radius: 40, height: 60 })}
+                >
+                  <option value="box">Box</option>
+                  <option value="cylinder">Cylinder</option>
+                </select>
+              </label>
+              {primitiveDefinition.type === 'box' ? (
+                <>
+                  {(['width', 'depth', 'height'] as const).map((dimension) => (
+                    <label key={dimension}>
+                      <span>{dimension[0].toUpperCase() + dimension.slice(1)} (mm)</span>
+                      <input type="number" min="0.01" max="1000000" step="0.01" required value={primitiveDefinition[dimension]}
+                        onChange={(event) => setPrimitiveDefinition({ ...primitiveDefinition, [dimension]: Number(event.target.value) })} />
+                    </label>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {(['radius', 'height'] as const).map((dimension) => (
+                    <label key={dimension}>
+                      <span>{dimension[0].toUpperCase() + dimension.slice(1)} (mm)</span>
+                      <input type="number" min="0.01" max="1000000" step="0.01" required value={primitiveDefinition[dimension]}
+                        onChange={(event) => setPrimitiveDefinition({ ...primitiveDefinition, [dimension]: Number(event.target.value) })} />
+                    </label>
+                  ))}
+                </>
+              )}
+              <button className="primary-button" type="submit" disabled={isCreatingPrimitive}>
+                {isCreatingPrimitive ? 'Building…' : primitiveBodyId && model?.bodyId === primitiveBodyId ? 'Update part' : 'Create part'}
+              </button>
+              <small>Created locally · Editable dimensions during this session</small>
+            </form>
+          )}
 
           {model ? (
             <>

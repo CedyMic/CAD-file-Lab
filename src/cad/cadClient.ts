@@ -1,3 +1,5 @@
+import type { CadPrimitive } from './primitive'
+
 export interface CadFaceMesh {
   vertices: number[] | Float32Array
   normals: number[] | Float32Array
@@ -62,10 +64,15 @@ interface DisposeBodyRequest {
   bodyId: string
 }
 
+interface CreatePrimitiveRequest { id: string; action: 'createPrimitive'; primitive: CadPrimitive }
+interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId: string; primitive: CadPrimitive }
+
 type WorkerRequest =
   | ImportStepRequest
   | SerializeProjectRequest
   | RestoreProjectRequest
+  | CreatePrimitiveRequest
+  | UpdatePrimitiveRequest
   | DisposeBodyRequest
 
 interface DisposedCadBody {
@@ -285,4 +292,16 @@ export async function disposeCadBody(
       'The CAD worker could not release the model.',
     )
   }
+}
+
+export async function createCadPrimitive(primitive: CadPrimitive): Promise<ImportedCadBody> {
+  const response = await sendRequest({ id: crypto.randomUUID(), action: 'createPrimitive', primitive })
+  if (!isImportedCadBody(response)) throw new Error('The CAD worker returned invalid primitive data.')
+  return response
+}
+
+export async function updateCadPrimitive(bodyId: string, primitive: CadPrimitive): Promise<ImportedCadBody> {
+  const response = await sendRequest({ id: crypto.randomUUID(), action: 'updatePrimitive', bodyId, primitive })
+  if (!isImportedCadBody(response)) throw new Error('The CAD worker returned invalid primitive data.')
+  return response
 }
