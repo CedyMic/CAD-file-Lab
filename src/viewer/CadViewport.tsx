@@ -324,8 +324,8 @@ function ImportedPart({
       >
         <meshStandardMaterial
           color={color}
-          emissive={selected ? '#b86b00' : '#000000'}
-          emissiveIntensity={selected ? 0.28 : 0}
+          emissive="#000000"
+          emissiveIntensity={0}
           metalness={0.02}
           roughness={0.68}
           wireframe={isWireframe}

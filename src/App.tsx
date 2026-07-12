@@ -46,6 +46,7 @@ import {
   type ViewCommand,
   type ViewCommandType,
 } from './viewer/CadViewport'
+import { updateBodySelection } from './viewer/bodySelection'
 
 import {
   DisplayPanel,
@@ -308,14 +309,7 @@ function App() {
   }
 
   function selectPart(partId: string, additive: boolean) {
-    setSelectedPartIds((current) => {
-      if (!additive) return new Set([partId])
-
-      const next = new Set(current)
-      if (next.has(partId)) next.delete(partId)
-      else next.add(partId)
-      return next
-    })
+    setSelectedPartIds((current) => updateBodySelection(current, partId, additive))
   }
 
   function selectAllParts() {
