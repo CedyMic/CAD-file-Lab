@@ -402,6 +402,72 @@ textarea:focus-visible {
   height: 100%;
 }
 
+.model-tree {
+  margin-top: 24px;
+  padding: 14px;
+  color: #34495c;
+  background: #f7f9fb;
+  border: 1px solid #dde4eb;
+  border-radius: 9px;
+}
+
+.model-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.model-tree-header .panel-label {
+  margin: 0;
+}
+
+.model-tree-header > span:last-child {
+  color: #6d7d8d;
+  font-size: 10px;
+}
+
+.model-tree ul {
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+  list-style: none;
+}
+
+.model-tree li {
+  min-width: 0;
+  padding: 6px 7px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.model-tree-file {
+  color: #1e3448;
+  background: #eaf3ff;
+}
+
+.model-tree-file strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-tree-body {
+  margin-left: 18px;
+  color: #516577;
+}
+
+.model-tree > p {
+  margin: 10px 0 0;
+  color: #6d7d8d;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .empty-workspace {
   position: absolute;
   z-index: 3;
@@ -878,7 +944,7 @@ textarea:focus-visible {
     gap: 5px;
   }
 
-  .viewer-actions button {
+.viewer-actions button {
     padding: 7px 9px;
   }
 }
@@ -903,6 +969,18 @@ textarea:focus-visible {
   .site-footer-privacy {
     display: none;
   }
+}
+
+.toolbar-availability {
+  margin-left: 6px;
+  padding: 2px 5px;
+  color: #9eb0bf;
+  background: #26333e;
+  border-radius: 4px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 @media (max-width: 680px) {

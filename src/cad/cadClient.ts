@@ -13,6 +13,10 @@ export interface CadEdgeMesh {
 export interface ImportedCadBody {
   bodyId: string
   fileName: string
+  bodySummaries: Array<{
+    id: string
+    name: string
+  }>
   faces: CadFaceMesh
   edges: CadEdgeMesh
 }
@@ -104,6 +108,8 @@ function isImportedCadBody(
   return (
     'faces' in data &&
     'edges' in data &&
+    'bodySummaries' in data &&
+    Array.isArray(data.bodySummaries) &&
     typeof data.bodyId === 'string'
   )
 }

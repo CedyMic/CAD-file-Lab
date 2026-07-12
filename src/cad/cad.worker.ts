@@ -70,6 +70,10 @@ type WorkerRequest =
 interface ImportedBodyData {
   bodyId: string
   fileName: string
+  bodySummaries: Array<{
+    id: string
+    name: string
+  }>
 
   faces: ReturnType<CadShape['mesh']>
 
@@ -264,9 +268,26 @@ function createRenderData(
   fileName: string,
   shape: CadShape,
 ): ImportedBodyData {
+  const solidShapes = (
+    shape as unknown as {
+      _listTopo: (topology: 'solid') => unknown[]
+    }
+  )._listTopo('solid')
+
+  const bodyCount = Math.max(solidShapes.length, 1)
+
   return {
     bodyId,
     fileName,
+    bodySummaries: Array.from(
+      { length: bodyCount },
+      (_, index) => ({
+        id: `${bodyId}-body-${index + 1}`,
+        name: bodyCount === 1
+          ? 'Body 1'
+          : `Body ${index + 1}`,
+      }),
+    ),
 
     faces: shape.mesh({
       tolerance: 0.1,

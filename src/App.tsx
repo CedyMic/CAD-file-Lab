@@ -90,13 +90,6 @@ const tools: Array<{
     available: false,
   },
   {
-    id: 'section',
-    label: 'Section',
-    description:
-      'Preview or permanently cut the model',
-    available: false,
-  },
-  {
     id: 'modify',
     label: 'Modify',
     description:
@@ -1085,6 +1078,30 @@ function App() {
             )}
           </nav>
 
+          <section className="model-tree" aria-labelledby="model-tree-title">
+            <div className="model-tree-header">
+              <span className="panel-label" id="model-tree-title">Model tree</span>
+              {model && <span>{model.bodySummaries.length} {model.bodySummaries.length === 1 ? 'body' : 'bodies'}</span>}
+            </div>
+
+            {model ? (
+              <ul>
+                <li className="model-tree-file">
+                  <span aria-hidden="true">▾</span>
+                  <strong title={model.fileName}>{model.fileName}</strong>
+                </li>
+                {model.bodySummaries.map((body) => (
+                  <li className="model-tree-body" key={body.id}>
+                    <span aria-hidden="true">◇</span>
+                    <span>{body.name}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>Open a 3D file to inspect its bodies and structure.</p>
+            )}
+          </section>
+
           <section className="project-panel">
             <div>
               <span className="panel-label">
@@ -1218,6 +1235,16 @@ function App() {
                 }}
               >
                 Visual settings
+              </button>
+
+              <button
+                type="button"
+                className="toolbar-button"
+                disabled
+                title="Section view is in development"
+              >
+                Section view
+                <span className="toolbar-availability">Planned</span>
               </button>
 
               <button
