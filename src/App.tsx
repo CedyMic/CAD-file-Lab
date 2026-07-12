@@ -189,11 +189,6 @@ function App() {
     )
 
   const [
-    showVisualSettings,
-    setShowVisualSettings,
-  ] = useState(false)
-
-  const [
     viewCommand,
     setViewCommand,
   ] =
@@ -1028,61 +1023,57 @@ function App() {
         </div>
       </header>
 
+      <nav className="cad-ribbon" aria-label="CAD commands">
+        <div className="ribbon-group">
+          <span className="ribbon-group-label">File</span>
+          <div>
+            <button type="button" onClick={openFilePicker} disabled={isLoading}>
+              <strong>Open</strong><span>3D file</span>
+            </button>
+            <button type="button" onClick={openProjectFilePicker} disabled={isLoading}>
+              <strong>Project</strong><span>Open local</span>
+            </button>
+            <button type="button" onClick={() => void saveProjectFile()} disabled={!model?.editable || isLoading}>
+              <strong>Save</strong><span>CAD Lab</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="ribbon-group">
+          <span className="ribbon-group-label">Inspect</span>
+          <div>
+            <button className="active" type="button" onClick={() => setActiveTool('view')}>
+              <strong>View</strong><span>Navigate</span>
+            </button>
+            <button type="button" disabled title="Measurement tools are in development">
+              <strong>Measure</strong><span>Planned</span>
+            </button>
+            <button type="button" disabled title="Section view is in development">
+              <strong>Section</strong><span>Planned</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="ribbon-group">
+          <span className="ribbon-group-label">Model</span>
+          <div>
+            <button type="button" disabled><strong>Create</strong><span>New body</span></button>
+            <button type="button" disabled><strong>Modify</strong><span>Geometry</span></button>
+            <button type="button" disabled><strong>Simplify</strong><span>Reduce size</span></button>
+          </div>
+        </div>
+
+        <div className="ribbon-group">
+          <span className="ribbon-group-label">Output</span>
+          <div>
+            <button type="button" disabled><strong>Convert</strong><span>3D format</span></button>
+            <button type="button" disabled><strong>Export</strong><span>Download</span></button>
+          </div>
+        </div>
+      </nav>
+
       <section className="workspace" id="workspace">
         <aside className="sidebar">
-          <div className="sidebar-heading">
-            <p>
-              Workspace
-            </p>
-
-            <h1>
-              Open and inspect 3D files
-              locally
-            </h1>
-          </div>
-
-          <nav
-            className="tool-navigation"
-            aria-label="CAD workspace tools"
-          >
-            {tools.map(
-              (tool) => (
-                <button
-                  key={tool.id}
-                  className={
-                    activeTool ===
-                    tool.id
-                      ? 'tool-button active'
-                      : 'tool-button'
-                  }
-                  type="button"
-                  disabled={!tool.available}
-                  onClick={() => {
-                    setActiveTool(
-                      tool.id,
-                    )
-                  }}
-                >
-                  <strong>
-                    {tool.label}
-
-                    {!tool.available && (
-                      <span className="tool-availability">
-                        Planned
-                      </span>
-                    )}
-                  </strong>
-
-                  <span>
-                    {
-                      tool.description
-                    }
-                  </span>
-                </button>
-              ),
-            )}
-          </nav>
-
           <section className="model-tree" aria-labelledby="model-tree-title">
             <div className="model-tree-header">
               <span className="panel-label" id="model-tree-title">Model tree</span>
@@ -1229,33 +1220,6 @@ function App() {
             <div className="viewer-actions">
               <button
                 type="button"
-                className={
-                  showVisualSettings
-                    ? 'toolbar-button active'
-                    : 'toolbar-button'
-                }
-                onClick={() => {
-                  setShowVisualSettings(
-                    (current) =>
-                      !current,
-                  )
-                }}
-              >
-                Visual settings
-              </button>
-
-              <button
-                type="button"
-                className="toolbar-button"
-                disabled
-                title="Section view is in development"
-              >
-                Section view
-                <span className="toolbar-availability">Planned</span>
-              </button>
-
-              <button
-                type="button"
                 className="toolbar-button"
                 onClick={() => {
                   sendViewCommand(
@@ -1349,28 +1313,6 @@ function App() {
               </span>
             </div>
 
-            {showVisualSettings && (
-              <div className="display-panel-overlay">
-                <DisplayPanel
-                  settings={
-                    displaySettings
-                  }
-                  onChange={
-                    setDisplaySettings
-                  }
-                  onFitView={() => {
-                    sendViewCommand(
-                      'fit',
-                    )
-                  }}
-                  onResetView={() => {
-                    sendViewCommand(
-                      'isometric',
-                    )
-                  }}
-                />
-              </div>
-            )}
           </div>
 
           <footer className="statusbar">
@@ -1391,6 +1333,29 @@ function App() {
             </span>
           </footer>
         </section>
+
+        <aside className="properties-sidebar" aria-label="Properties">
+          <header>
+            <div>
+              <span className="panel-label">Properties</span>
+              <strong>{model ? 'Model display' : 'No selection'}</strong>
+            </div>
+          </header>
+
+          {model ? (
+            <DisplayPanel
+              settings={displaySettings}
+              onChange={setDisplaySettings}
+              onFitView={() => sendViewCommand('fit')}
+              onResetView={() => sendViewCommand('isometric')}
+            />
+          ) : (
+            <div className="properties-empty">
+              <strong>Select a model or body</strong>
+              <p>Display, geometry and tool settings will appear here.</p>
+            </div>
+          )}
+        </aside>
       </section>
 
       <footer className="site-footer">

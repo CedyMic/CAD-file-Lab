@@ -45,7 +45,7 @@ textarea:focus-visible {
 .app-shell {
   height: 100vh;
   display: grid;
-  grid-template-rows: 64px minmax(0, 1fr) auto;
+  grid-template-rows: 56px 82px minmax(0, 1fr) auto;
   overflow: hidden;
 }
 
@@ -66,7 +66,7 @@ textarea:focus-visible {
 }
 
 .topbar {
-  height: 64px;
+  height: 56px;
   padding: 0 20px;
   display: flex;
   align-items: center;
@@ -75,6 +75,75 @@ textarea:focus-visible {
   color: #17212b;
   background: #ffffff;
   border-bottom: 1px solid #dce3ea;
+}
+
+.cad-ribbon {
+  min-width: 0;
+  padding: 6px 12px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  color: #203243;
+  background: #f4f6f8;
+  border-bottom: 1px solid #bdc8d2;
+}
+
+.ribbon-group {
+  min-width: max-content;
+  padding: 0 10px 14px;
+  position: relative;
+  border-right: 1px solid #cfd7de;
+}
+
+.ribbon-group:last-child {
+  border-right: 0;
+}
+
+.ribbon-group > div {
+  display: flex;
+  gap: 4px;
+}
+
+.ribbon-group button {
+  min-width: 68px;
+  padding: 7px 9px;
+  display: grid;
+  gap: 2px;
+  color: #33485a;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+}
+
+.ribbon-group button:hover:not(:disabled),
+.ribbon-group button.active {
+  color: #0e4f91;
+  background: #e3effb;
+  border-color: #a8c7e6;
+}
+
+.ribbon-group button:disabled {
+  opacity: 0.48;
+}
+
+.ribbon-group button strong {
+  font-size: 12px;
+}
+
+.ribbon-group button span {
+  color: #718291;
+  font-size: 9px;
+}
+
+.ribbon-group-label {
+  position: absolute;
+  right: 10px;
+  bottom: 1px;
+  left: 10px;
+  color: #6e7d89;
+  font-size: 9px;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .brand,
@@ -192,15 +261,64 @@ textarea:focus-visible {
 .workspace {
   min-height: 0;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr) 280px;
 }
 
 .sidebar {
-  padding: 22px;
+  padding: 12px;
   overflow-y: auto;
   color: #253342;
   background: #ffffff;
   border-right: 1px solid #dce3ea;
+}
+
+.sidebar .model-tree {
+  margin-top: 0;
+}
+
+.properties-sidebar {
+  min-width: 0;
+  overflow-y: auto;
+  color: #d9e6f2;
+  background: #18232d;
+  border-left: 1px solid #344553;
+}
+
+.properties-sidebar > header {
+  padding: 13px 14px;
+  background: #202d38;
+  border-bottom: 1px solid #344553;
+}
+
+.properties-sidebar > header div {
+  display: grid;
+  gap: 2px;
+}
+
+.properties-sidebar > header .panel-label {
+  margin: 0;
+  color: #77b9fa;
+}
+
+.properties-empty {
+  padding: 18px 14px;
+  color: #9aabba;
+}
+
+.properties-empty strong {
+  color: #dbe6ef;
+  font-size: 12px;
+}
+
+.properties-empty p {
+  margin: 7px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.properties-sidebar .display-panel {
+  width: auto;
+  padding: 14px;
 }
 
 .sidebar-heading p,
@@ -929,7 +1047,11 @@ textarea:focus-visible {
 
 @media (max-width: 960px) {
   .workspace {
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: 230px minmax(0, 1fr);
+  }
+
+  .properties-sidebar {
+    display: none;
   }
 
   .sidebar {
@@ -955,7 +1077,7 @@ textarea:focus-visible {
   }
 
   .workspace {
-    grid-template-columns: 250px minmax(0, 1fr);
+    grid-template-columns: 210px minmax(0, 1fr);
   }
 
   .sidebar-heading h1 {
@@ -984,6 +1106,14 @@ textarea:focus-visible {
 }
 
 @media (max-width: 680px) {
+  .app-shell {
+    grid-template-rows: 56px 74px minmax(0, 1fr) auto;
+  }
+
+  .cad-ribbon {
+    padding-inline: 6px;
+  }
+
   .topbar {
     padding: 0 12px;
   }
