@@ -287,6 +287,14 @@ function App() {
     })
   }
 
+  function setPartColor(partId: string, color: string) {
+    setPartColors((current) => {
+      const next = new Map(current)
+      next.set(partId, color)
+      return next
+    })
+  }
+
   function setSelectedPartsOpacity(opacity: number) {
     setPartOpacities((current) => {
       const next = new Map(current)
@@ -1209,6 +1217,15 @@ function App() {
                       <span className="body-color-dot" style={{ background: partColors.get(body.id) ?? displaySettings.modelColor }} aria-hidden="true" />
                       <span>{body.name}</span>
                     </button>
+                    <input
+                      className="body-color-input"
+                      type="color"
+                      value={partColors.get(body.id) ?? displaySettings.modelColor}
+                      onChange={(event) => setPartColor(body.id, event.target.value)}
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label={`Change ${body.name} color`}
+                      title={`Change ${body.name} color only`}
+                    />
                     <button
                       className="body-visibility-button"
                       type="button"

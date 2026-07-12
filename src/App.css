@@ -749,6 +749,22 @@ textarea:focus-visible {
 .body-select-button > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .body-color-dot { width: 10px; height: 10px; flex: 0 0 auto; border: 1px solid rgb(0 0 0 / 24%); border-radius: 50%; }
 
+.body-color-input {
+  width: 25px;
+  height: 25px;
+  padding: 3px;
+  flex: 0 0 auto;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.body-color-input:hover { background: #dceaf7; }
+.body-color-input::-webkit-color-swatch-wrapper { padding: 0; }
+.body-color-input::-webkit-color-swatch { border: 1px solid rgb(0 0 0 / 24%); border-radius: 50%; }
+.body-color-input::-moz-color-swatch { border: 1px solid rgb(0 0 0 / 24%); border-radius: 50%; }
+
 .body-visibility-button {
   width: 25px;
   height: 25px;
