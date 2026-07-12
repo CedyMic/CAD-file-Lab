@@ -1027,14 +1027,14 @@ function App() {
         <div className="ribbon-group">
           <span className="ribbon-group-label">File</span>
           <div>
-            <button type="button" onClick={openFilePicker} disabled={isLoading}>
-              <strong>Open</strong><span>3D file</span>
+            <button type="button" onClick={openFilePicker} disabled={isLoading} title="Import an original 3D model file">
+              <strong>Open Model</strong><span>3D format</span>
             </button>
-            <button type="button" onClick={openProjectFilePicker} disabled={isLoading}>
-              <strong>Project</strong><span>Open local</span>
+            <button type="button" onClick={openProjectFilePicker} disabled={isLoading} title="Reopen a workspace previously saved by CAD File Lab">
+              <strong>Open Project</strong><span>Saved .cadlab workspace</span>
             </button>
-            <button type="button" onClick={() => void saveProjectFile()} disabled={!model?.editable || isLoading}>
-              <strong>Save</strong><span>CAD Lab</span>
+            <button type="button" onClick={() => void saveProjectFile()} disabled={!model?.editable || isLoading} title="Save geometry and workspace settings as a local CAD Lab project">
+              <strong>Save Project</strong><span>Workspace copy</span>
             </button>
           </div>
         </div>
@@ -1221,27 +1221,33 @@ function App() {
               <button
                 type="button"
                 className="toolbar-button"
+                aria-label="Fit model to view"
+                title="Fit model to view"
                 onClick={() => {
                   sendViewCommand(
                     'fit',
                   )
                 }}
               >
-                Fit
+                <span className="toolbar-icon" aria-hidden="true">⛶</span>
               </button>
 
               <button
                 type="button"
                 disabled
+                aria-label="Undo"
+                title="Undo"
               >
-                Undo
+                <span className="toolbar-icon" aria-hidden="true">↶</span>
               </button>
 
               <button
                 type="button"
                 disabled
+                aria-label="Redo"
+                title="Redo"
               >
-                Redo
+                <span className="toolbar-icon" aria-hidden="true">↷</span>
               </button>
             </div>
           </div>
