@@ -1566,23 +1566,26 @@ textarea:focus-visible {
 }
 .conversion-panel {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 8px;
+  padding: 11px;
   border-bottom: 1px solid #395064;
 }
 
 .conversion-panel h3,
 .conversion-panel p { margin: 0; }
 .conversion-panel > p,
-.conversion-panel > small { color: #b8c9d9; line-height: 1.45; }
-.conversion-panel label { display: grid; gap: 6px; color: #d9e6f2; font-weight: 600; }
+.conversion-panel > small { color: #b8c9d9; font-size: 10px; line-height: 1.3; }
+.conversion-panel h3 { font-size: 15px; line-height: 1.2; }
+.conversion-panel label { display: grid; gap: 4px; color: #d9e6f2; font-size: 11px; font-weight: 600; }
 .conversion-panel select { width: 100%; }
-.conversion-panel fieldset { display: grid; gap: 8px; margin: 0; padding: 10px; border: 1px solid #40586c; border-radius: 7px; }
+.conversion-panel fieldset { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 0; padding: 6px 8px 8px; border: 1px solid #40586c; border-radius: 7px; }
 .conversion-panel legend { padding: 0 5px; color: #d9e6f2; font-weight: 700; }
 .conversion-panel fieldset label { grid-template-columns: auto 1fr; align-items: center; font-weight: 500; }
-.conversion-panel fieldset small { grid-column: 2; color: #9fb3c5; }
 .reduction-field { grid-template-columns: 1fr auto; }
 .reduction-field input { grid-column: 1 / -1; width: 100%; }
-.triangle-preview { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; padding: 10px; background: #142431; border-radius: 7px; }
-.triangle-preview span { color: #afc2d2; }
+.reduction-risk { display: grid; gap: 3px; padding: 10px; border: 1px solid; border-radius: 7px; }
+.reduction-risk span { color: inherit; font-size: 11px; line-height: 1.4; }
+.reduction-risk.low { color: #bcebc9; background: #173626; border-color: #315f43; }
+.reduction-risk.medium { color: #ffe4a3; background: #493a18; border-color: #806521; }
+.reduction-risk.high { color: #ffd0cb; background: #4b2422; border-color: #8c4842; }
 .conversion-warning { padding: 9px; color: #ffe4a3 !important; background: #493a18; border: 1px solid #806521; border-radius: 7px; }

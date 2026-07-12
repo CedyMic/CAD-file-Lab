@@ -67,12 +67,15 @@ type WorkspaceTool =
   | 'measure'
   | 'section'
   | 'modify'
-  | 'export'
+  | 'convert'
+  | 'simplify'
 
 type InformationPanel =
   | 'help'
   | 'feedback'
   | null
+
+type FileOpenIntent = 'view' | 'convert' | 'reduce'
 
 const AUTOSAVE_INTERVAL =
   5 * 60 * 1000
@@ -105,10 +108,17 @@ const tools: Array<{
     available: false,
   },
   {
-    id: 'export',
-    label: 'Convert & simplify',
+    id: 'convert',
+    label: 'Convert',
     description:
-      'Download the open model as a reduced or full-quality mesh',
+      'Download the open model in another mesh format',
+    available: true,
+  },
+  {
+    id: 'simplify',
+    label: 'Simplify',
+    description:
+      'Reduce model size with a controlled detail level',
     available: true,
   },
 ]
@@ -141,6 +151,9 @@ function App() {
 
   const modelLoadInProgressRef =
     useRef(false)
+
+  const fileOpenIntentRef =
+    useRef<FileOpenIntent>('view')
 
   const informationPanelRef =
     useRef<HTMLElement>(null)
@@ -243,8 +256,6 @@ function App() {
   const selectedPart = selectedParts[0] ?? null
   const visibleParts = model?.renderParts.filter((part) => !hiddenPartIds.has(part.id)) ?? []
   const exportParts = exportScope === 'selected' ? selectedParts : visibleParts
-  const exportTriangleCount = exportParts.reduce((sum, part) => sum + part.faces.triangles.length / 3, 0)
-  const reducedTriangleCount = exportTriangleCount ? Math.max(1, Math.round(exportTriangleCount * exportRatio)) : 0
 
   function downloadConvertedMesh() {
     if (!model || exportParts.length === 0) return
@@ -260,7 +271,11 @@ function App() {
       }
       const converted = convertTriangleMesh(
         { vertices, triangles },
-        { format: exportFormat, reductionRatio: exportRatio, fileName: model.fileName },
+        {
+          format: exportFormat,
+          reductionRatio: activeTool === 'simplify' ? exportRatio : 1,
+          fileName: model.fileName,
+        },
       )
       const url = URL.createObjectURL(converted.blob)
       const link = document.createElement('a')
@@ -351,7 +366,8 @@ function App() {
     })
   }
 
-  function openFilePicker() {
+  function openFilePicker(intent: FileOpenIntent = 'view') {
+    fileOpenIntentRef.current = intent
     fileInputRef.current?.click()
   }
 
@@ -771,6 +787,16 @@ function App() {
 
       installModel(importedModel)
 
+      if (fileOpenIntentRef.current === 'convert') {
+        setExportRatio(1)
+        setActiveTool('convert')
+      } else if (fileOpenIntentRef.current === 'reduce') {
+        setExportRatio(0.5)
+        setActiveTool('simplify')
+      } else {
+        setActiveTool('view')
+      }
+
       await releaseSupersededCadBody(
         previousBodyId,
         importedModel.bodyId,
@@ -803,6 +829,7 @@ function App() {
 
       setStatus('Import failed')
     } finally {
+      fileOpenIntentRef.current = 'view'
       modelLoadInProgressRef.current = false
       setIsLoading(false)
     }
@@ -1117,7 +1144,7 @@ function App() {
             className="primary-button"
             type="button"
             disabled={isLoading}
-            onClick={openFilePicker}
+            onClick={() => openFilePicker()}
           >
             {isLoading
               ? 'Working…'
@@ -1164,7 +1191,7 @@ function App() {
         <div className="ribbon-group">
           <span className="ribbon-group-label">File</span>
           <div>
-            <button type="button" onClick={openFilePicker} disabled={isLoading} title="Open a 3D model or resume saved CAD File Lab work">
+            <button type="button" onClick={() => openFilePicker()} disabled={isLoading} title="Open a 3D model or resume saved CAD File Lab work">
               <strong>Open</strong><span>Model or saved work</span>
             </button>
             <button
@@ -1202,15 +1229,15 @@ function App() {
           <div>
             <button type="button" disabled><strong>Create</strong><span>New body</span></button>
             <button type="button" disabled><strong>Modify</strong><span>Geometry</span></button>
-            <button type="button" disabled={!model} onClick={() => setActiveTool('export')}><strong>Simplify</strong><span>Reduce size</span></button>
+            <button type="button" disabled={!model} onClick={() => setActiveTool('simplify')}><strong>Simplify</strong><span>Reduce size</span></button>
           </div>
         </div>
 
         <div className="ribbon-group">
           <span className="ribbon-group-label">Output</span>
           <div>
-            <button type="button" disabled={!model} onClick={() => setActiveTool('export')}><strong>Convert</strong><span>3D format</span></button>
-            <button type="button" disabled={!model} onClick={() => setActiveTool('export')}><strong>Export</strong><span>Download</span></button>
+            <button type="button" disabled={!model} onClick={() => setActiveTool('convert')}><strong>Convert</strong><span>3D format</span></button>
+            <button type="button" disabled={!model} onClick={() => setActiveTool('convert')}><strong>Export</strong><span>Download</span></button>
           </div>
         </div>
       </nav>
@@ -1507,14 +1534,14 @@ function App() {
                   Work with 3D models directly in your browser. Your files stay on
                   your device—no uploads and no server-side model processing.
                 </p>
-                <button className="primary-button" type="button" onClick={openFilePicker}>
+                <button className="primary-button" type="button" onClick={() => openFilePicker()}>
                   Choose a 3D file
                 </button>
                 <div className="start-actions">
                   <article>
                     <strong>View 3D file</strong>
                     <span>Inspect a model privately</span>
-                    <button type="button" onClick={openFilePicker}>Choose 3D file</button>
+                    <button type="button" onClick={() => openFilePicker()}>Choose 3D file</button>
                   </article>
                   <article>
                     <strong>Create 3D file</strong>
@@ -1529,12 +1556,12 @@ function App() {
                   <article>
                     <strong>Convert file</strong>
                     <span>Change to another 3D format</span>
-                    <button type="button" disabled>Choose file · Coming next</button>
+                    <button type="button" onClick={() => openFilePicker('convert')}>Choose file</button>
                   </article>
                   <article>
                     <strong>Reduce file size</strong>
-                    <span>Simplify CAD or mesh geometry</span>
-                    <button type="button" disabled>Choose file · Coming next</button>
+                    <span>Reduce mesh geometry locally</span>
+                    <button type="button" onClick={() => openFilePicker('reduce')}>Choose file</button>
                   </article>
                 </div>
                 <div className="format-support" aria-label="Supported 3D file formats">
@@ -1621,15 +1648,14 @@ function App() {
 
           {model ? (
             <>
-              {activeTool === 'export' && (
+              {(activeTool === 'convert' || activeTool === 'simplify') && (
                 <section className="conversion-panel" aria-labelledby="conversion-title">
-                  <span className="panel-label">Local mesh conversion</span>
-                  <h3 id="conversion-title">Convert & simplify</h3>
-                  <p>Your model is processed entirely in this browser and is never uploaded.</p>
+                  <span className="panel-label">{activeTool === 'simplify' ? 'Local model reduction' : 'Local format conversion'}</span>
+                  <h3 id="conversion-title">{activeTool === 'simplify' ? 'Reduce file size' : 'Convert file'}</h3>
                   <fieldset>
-                    <legend>Bodies to export</legend>
-                    <label><input type="radio" name="export-scope" checked={exportScope === 'visible'} onChange={() => setExportScope('visible')} /> Visible bodies <small>({visibleParts.length}; hidden bodies excluded)</small></label>
-                    <label><input type="radio" name="export-scope" checked={exportScope === 'selected'} onChange={() => setExportScope('selected')} /> Selected bodies <small>({selectedParts.length}; included even if hidden)</small></label>
+                    <legend>Export</legend>
+                    <label title="Hidden bodies are excluded"><input type="radio" name="export-scope" checked={exportScope === 'visible'} onChange={() => setExportScope('visible')} /> Visible ({visibleParts.length})</label>
+                    <label title="Selected bodies are included even when hidden"><input type="radio" name="export-scope" checked={exportScope === 'selected'} onChange={() => setExportScope('selected')} /> Selected ({selectedParts.length})</label>
                   </fieldset>
                   <label>
                     <span>Output format</span>
@@ -1637,19 +1663,34 @@ function App() {
                       <option value="stl">STL (binary)</option>
                       <option value="obj">OBJ</option>
                       <option value="ply">PLY</option>
+                      <option value="glb">GLB</option>
+                      <option value="gltf">glTF (embedded)</option>
+                      <option value="3mf">3MF</option>
                     </select>
                   </label>
-                  <label className="reduction-field">
-                    <span>Triangles retained</span><output>{Math.round(exportRatio * 100)}%</output>
-                    <input type="range" min="0.05" max="1" step="0.05" value={exportRatio} onChange={(event) => setExportRatio(Number(event.target.value))} />
-                  </label>
-                  <div className="triangle-preview"><span>Current</span><strong>{exportTriangleCount.toLocaleString()}</strong><span>Export estimate</span><strong>{reducedTriangleCount.toLocaleString()}</strong></div>
-                  {exportRatio < 0.5 && <p className="conversion-warning" role="alert">Aggressive reduction can remove small holes, curves and other fine geometry. Inspect the exported result before using it.</p>}
+                  {activeTool === 'simplify' && (
+                    <>
+                      <label className="reduction-field">
+                        <span>Keep model detail</span><output>{Math.round(exportRatio * 100)}%</output>
+                        <input type="range" min="0.05" max="1" step="0.05" value={exportRatio} onChange={(event) => setExportRatio(Number(event.target.value))} />
+                      </label>
+                      <div className={`reduction-risk ${exportRatio >= 0.8 ? 'low' : exportRatio >= 0.5 ? 'medium' : 'high'}`} role="status">
+                        <strong>{exportRatio === 1 ? 'No reduction risk' : exportRatio >= 0.8 ? 'Low risk' : exportRatio >= 0.5 ? 'Moderate risk' : 'High risk'}</strong>
+                        <span>{exportRatio === 1
+                          ? 'The complete mesh detail is retained.'
+                          : exportRatio >= 0.8
+                            ? 'Small visual differences may appear.'
+                            : exportRatio >= 0.5
+                              ? 'Fine curves and small features may lose detail.'
+                              : 'Small holes, thin walls and fine geometry may be damaged.'}</span>
+                      </div>
+                    </>
+                  )}
                   <button className="primary-button" type="button" disabled={isExporting || exportParts.length === 0} onClick={downloadConvertedMesh}>
                     {isExporting ? 'Converting…' : `Download ${exportFormat.toUpperCase()}`}
                   </button>
                   {exportParts.length === 0 && <p className="conversion-warning">Choose at least one body for this export scope.</p>}
-                  <small>Mesh conversion approximates exact CAD surfaces. The open model and original file are not changed.</small>
+                  <small>Local only · Original unchanged</small>
                 </section>
               )}
               {selectedPart && (
