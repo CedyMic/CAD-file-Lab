@@ -395,6 +395,58 @@ textarea:focus-visible {
   padding: 14px;
 }
 
+.body-properties {
+  padding: 13px 14px;
+  display: grid;
+  gap: 12px;
+  background: #202d38;
+  border-bottom: 1px solid #344553;
+}
+
+.body-properties label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #c8d6e2;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.body-properties input[type="color"] {
+  width: 48px;
+  height: 30px;
+  padding: 2px;
+  background: #15202a;
+  border: 1px solid #4a5d6d;
+  border-radius: 5px;
+}
+
+.body-properties .body-opacity-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+}
+
+.body-opacity-field output {
+  color: #8fc5f4;
+  font-size: 10px;
+}
+
+.body-opacity-field input {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.body-properties button {
+  padding: 7px 9px;
+  color: #dce8f2;
+  background: #2a3946;
+  border: 1px solid #455a6a;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .sidebar-heading p,
 .panel-label {
   margin: 0 0 6px;
@@ -660,6 +712,42 @@ textarea:focus-visible {
   margin-left: 18px;
   color: #516577;
 }
+
+.model-tree-body > span[aria-hidden="true"] { display: none; }
+.model-tree-body.selected { color: #104f9f; background: #eaf3ff; }
+.model-tree-body.hidden { opacity: 0.58; }
+
+.body-select-button {
+  min-width: 0;
+  padding: 3px 2px;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+
+.body-select-button > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.body-color-dot { width: 10px; height: 10px; flex: 0 0 auto; border: 1px solid rgb(0 0 0 / 24%); border-radius: 50%; }
+
+.body-visibility-button {
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #50718d;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.body-visibility-button:hover { background: #dceaf7; }
 
 .model-tree > p {
   margin: 10px 0 0;

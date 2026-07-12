@@ -20,6 +20,7 @@ import type {
 import * as THREE from 'three'
 
 import type {
+  CadRenderPart,
   ImportedCadBody,
 } from '../cad/cadClient'
 
@@ -41,6 +42,10 @@ interface CadViewportProps {
   model: ImportedCadBody | null
   settings?: DisplaySettings
   viewCommand?: ViewCommand | null
+  hiddenPartIds?: ReadonlySet<string>
+  selectedPartId?: string | null
+  partColors?: ReadonlyMap<string, string>
+  partOpacities?: ReadonlyMap<string, number>
 }
 
 interface ViewMetrics {
@@ -187,12 +192,20 @@ function TestModel({
   )
 }
 
-function ImportedModel({
-  model,
+function ImportedPart({
+  part,
   settings,
+  modelPosition,
+  color,
+  selected,
+  opacity,
 }: {
-  model: ImportedCadBody
+  part: CadRenderPart
   settings: DisplaySettings
+  modelPosition: THREE.Vector3
+  color: string
+  selected: boolean
+  opacity: number
 }) {
   const faceGeometry =
     useMemo(() => {
@@ -203,21 +216,21 @@ function ImportedModel({
         'position',
         new THREE.BufferAttribute(
           convertZUpToYUp(
-            model.faces.vertices,
+            part.faces.vertices,
           ),
           3,
         ),
       )
 
       if (
-        model.faces.normals.length >
+        part.faces.normals.length >
         0
       ) {
         geometry.setAttribute(
           'normal',
           new THREE.BufferAttribute(
             convertZUpToYUp(
-              model.faces.normals,
+              part.faces.normals,
             ),
             3,
           ),
@@ -229,7 +242,7 @@ function ImportedModel({
       geometry.setIndex(
         new THREE.BufferAttribute(
           Uint32Array.from(
-            model.faces.triangles,
+            part.faces.triangles,
           ),
           1,
         ),
@@ -239,7 +252,7 @@ function ImportedModel({
       geometry.computeBoundingSphere()
 
       return geometry
-    }, [model])
+    }, [part])
 
   const edgeGeometry =
     useMemo(() => {
@@ -250,7 +263,7 @@ function ImportedModel({
         'position',
         new THREE.BufferAttribute(
           convertZUpToYUp(
-            model.edges.lines,
+            part.edges.lines,
           ),
           3,
         ),
@@ -260,28 +273,7 @@ function ImportedModel({
       geometry.computeBoundingSphere()
 
       return geometry
-    }, [model])
-
-  const modelPosition =
-    useMemo(() => {
-      const boundingBox =
-        faceGeometry.boundingBox
-
-      if (!boundingBox) {
-        return new THREE.Vector3()
-      }
-
-      const center =
-        boundingBox.getCenter(
-          new THREE.Vector3(),
-        )
-
-      return new THREE.Vector3(
-        -center.x,
-        -boundingBox.min.y,
-        -center.z,
-      )
-    }, [faceGeometry])
+    }, [part])
 
   useEffect(() => {
     return () => {
@@ -307,18 +299,21 @@ function ImportedModel({
     settings.displayStyle ===
       'ghosted'
 
+  const configuredOpacity = settings.modelOpacity * opacity
   const modelOpacity = isGhosted
     ? Math.min(
-        settings.modelOpacity,
+        configuredOpacity,
         0.28,
       )
-    : settings.modelOpacity
+    : configuredOpacity
 
   return (
     <group position={modelPosition}>
       <mesh geometry={faceGeometry}>
         <meshStandardMaterial
-          color={settings.modelColor}
+          color={color}
+          emissive={selected ? '#1d6fae' : '#000000'}
+          emissiveIntensity={selected ? 0.22 : 0}
           metalness={0.04}
           roughness={0.58}
           wireframe={isWireframe}
@@ -346,6 +341,53 @@ function ImportedModel({
           />
         </lineSegments>
       )}
+    </group>
+  )
+}
+
+function ImportedModel({
+  model,
+  settings,
+  hiddenPartIds,
+  selectedPartId,
+  partColors,
+  partOpacities,
+}: {
+  model: ImportedCadBody
+  settings: DisplaySettings
+  hiddenPartIds: ReadonlySet<string>
+  selectedPartId: string | null
+  partColors: ReadonlyMap<string, string>
+  partOpacities: ReadonlyMap<string, number>
+}) {
+  const modelPosition = useMemo(() => {
+    const positions = convertZUpToYUp(model.faces.vertices)
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geometry.computeBoundingBox()
+    const bounds = geometry.boundingBox
+    geometry.dispose()
+
+    if (!bounds) return new THREE.Vector3()
+    const center = bounds.getCenter(new THREE.Vector3())
+    return new THREE.Vector3(-center.x, -bounds.min.y, -center.z)
+  }, [model])
+
+  return (
+    <group>
+      {model.renderParts.map((part) => (
+        hiddenPartIds.has(part.id) ? null : (
+          <ImportedPart
+            key={part.id}
+            part={part}
+            settings={settings}
+            modelPosition={modelPosition}
+            color={partColors.get(part.id) ?? settings.modelColor}
+            selected={selectedPartId === part.id}
+            opacity={partOpacities.get(part.id) ?? 1}
+          />
+        )
+      ))}
     </group>
   )
 }
@@ -537,6 +579,10 @@ export function CadViewport({
   settings =
     defaultDisplaySettings,
   viewCommand = null,
+  hiddenPartIds = new Set<string>(),
+  selectedPartId = null,
+  partColors = new Map<string, string>(),
+  partOpacities = new Map<string, number>(),
 }: CadViewportProps) {
   const lightStrength =
     settings.brightness
@@ -650,6 +696,10 @@ export function CadViewport({
         <ImportedModel
           model={model}
           settings={settings}
+          hiddenPartIds={hiddenPartIds}
+          selectedPartId={selectedPartId}
+          partColors={partColors}
+          partOpacities={partOpacities}
         />
       ) : (
         <TestModel

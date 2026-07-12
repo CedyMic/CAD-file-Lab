@@ -10,6 +10,13 @@ export interface CadEdgeMesh {
   edgeGroups?: unknown[]
 }
 
+export interface CadRenderPart {
+  id: string
+  name: string
+  faces: CadFaceMesh
+  edges: CadEdgeMesh
+}
+
 export interface ImportedCadBody {
   bodyId: string
   fileName: string
@@ -18,6 +25,7 @@ export interface ImportedCadBody {
     id: string
     name: string
   }>
+  renderParts: CadRenderPart[]
   faces: CadFaceMesh
   edges: CadEdgeMesh
 }
@@ -111,6 +119,8 @@ function isImportedCadBody(
     'edges' in data &&
     'bodySummaries' in data &&
     Array.isArray(data.bodySummaries) &&
+    'renderParts' in data &&
+    Array.isArray(data.renderParts) &&
     typeof data.editable === 'boolean' &&
     typeof data.bodyId === 'string'
   )

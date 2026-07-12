@@ -168,6 +168,11 @@ function App() {
       null,
     )
 
+  const [selectedPartId, setSelectedPartId] = useState<string | null>(null)
+  const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(() => new Set())
+  const [partColors, setPartColors] = useState<Map<string, string>>(() => new Map())
+  const [partOpacities, setPartOpacities] = useState<Map<string, number>>(() => new Map())
+
   const [isLoading, setIsLoading] =
     useState(false)
 
@@ -223,6 +228,41 @@ function App() {
       (tool) =>
         tool.id === activeTool,
     ) ?? tools[0]
+
+  const selectedPart = model?.renderParts.find((part) => part.id === selectedPartId) ?? null
+
+  function installModel(nextModel: ImportedCadBody) {
+    setModel(nextModel)
+    setSelectedPartId(nextModel.renderParts[0]?.id ?? null)
+    setHiddenPartIds(new Set())
+    setPartColors(new Map())
+    setPartOpacities(new Map())
+  }
+
+  function togglePartVisibility(partId: string) {
+    setHiddenPartIds((current) => {
+      const next = new Set(current)
+      if (next.has(partId)) next.delete(partId)
+      else next.add(partId)
+      return next
+    })
+  }
+
+  function setPartColor(partId: string, color: string) {
+    setPartColors((current) => {
+      const next = new Map(current)
+      next.set(partId, color)
+      return next
+    })
+  }
+
+  function setPartOpacity(partId: string, opacity: number) {
+    setPartOpacities((current) => {
+      const next = new Map(current)
+      next.set(partId, opacity)
+      return next
+    })
+  }
 
   function openFilePicker() {
     fileInputRef.current?.click()
@@ -642,7 +682,7 @@ function App() {
       const importedModel =
         await importStepFile(file)
 
-      setModel(importedModel)
+      installModel(importedModel)
 
       await releaseSupersededCadBody(
         previousBodyId,
@@ -796,7 +836,7 @@ function App() {
           bodyId: crypto.randomUUID(),
         })
 
-      setModel(restoredModel)
+      installModel(restoredModel)
 
       await releaseSupersededCadBody(
         previousBodyId,
@@ -864,7 +904,7 @@ function App() {
           bodyId: crypto.randomUUID(),
         })
 
-      setModel(recoveredModel)
+      installModel(recoveredModel)
 
       await releaseSupersededCadBody(
         previousBodyId,
@@ -1103,9 +1143,29 @@ function App() {
                   <strong title={model.fileName}>{model.fileName}</strong>
                 </li>
                 {model.bodySummaries.map((body) => (
-                  <li className="model-tree-body" key={body.id}>
+                  <li
+                    className={`model-tree-body${selectedPartId === body.id ? ' selected' : ''}${hiddenPartIds.has(body.id) ? ' hidden' : ''}`}
+                    key={body.id}
+                  >
                     <span aria-hidden="true">◇</span>
-                    <span>{body.name}</span>
+                    <button
+                      className="body-select-button"
+                      type="button"
+                      onClick={() => setSelectedPartId(body.id)}
+                      aria-pressed={selectedPartId === body.id}
+                    >
+                      <span className="body-color-dot" style={{ background: partColors.get(body.id) ?? displaySettings.modelColor }} aria-hidden="true" />
+                      <span>{body.name}</span>
+                    </button>
+                    <button
+                      className="body-visibility-button"
+                      type="button"
+                      onClick={() => togglePartVisibility(body.id)}
+                      aria-label={`${hiddenPartIds.has(body.id) ? 'Show' : 'Hide'} ${body.name}`}
+                      title={`${hiddenPartIds.has(body.id) ? 'Show' : 'Hide'} ${body.name}`}
+                    >
+                      {hiddenPartIds.has(body.id) ? '○' : '●'}
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -1304,6 +1364,10 @@ function App() {
               viewCommand={
                 viewCommand
               }
+              hiddenPartIds={hiddenPartIds}
+              selectedPartId={selectedPartId}
+              partColors={partColors}
+              partOpacities={partOpacities}
             />
 
             {error && (
@@ -1430,17 +1494,47 @@ function App() {
           <header>
             <div>
               <span className="panel-label">Properties</span>
-              <strong>{model ? 'Model display' : 'No selection'}</strong>
+              <strong>{selectedPart?.name ?? (model ? 'Model display' : 'No selection')}</strong>
             </div>
           </header>
 
           {model ? (
-            <DisplayPanel
-              settings={displaySettings}
-              onChange={setDisplaySettings}
-              onFitView={() => sendViewCommand('fit')}
-              onResetView={() => sendViewCommand('isometric')}
-            />
+            <>
+              {selectedPart && (
+                <section className="body-properties">
+                  <label>
+                    <span>Body color</span>
+                    <input
+                      type="color"
+                      value={partColors.get(selectedPart.id) ?? displaySettings.modelColor}
+                      onChange={(event) => setPartColor(selectedPart.id, event.target.value)}
+                    />
+                  </label>
+                  <label className="body-opacity-field">
+                    <span>Transparency</span>
+                    <output>{Math.round((1 - (partOpacities.get(selectedPart.id) ?? 1)) * 100)}%</output>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1"
+                      step="0.05"
+                      value={partOpacities.get(selectedPart.id) ?? 1}
+                      onChange={(event) => setPartOpacity(selectedPart.id, Number(event.target.value))}
+                      aria-label={`${selectedPart.name} opacity`}
+                    />
+                  </label>
+                  <button type="button" onClick={() => togglePartVisibility(selectedPart.id)}>
+                    {hiddenPartIds.has(selectedPart.id) ? 'Show body' : 'Hide body'}
+                  </button>
+                </section>
+              )}
+              <DisplayPanel
+                settings={displaySettings}
+                onChange={setDisplaySettings}
+                onFitView={() => sendViewCommand('fit')}
+                onResetView={() => sendViewCommand('isometric')}
+              />
+            </>
           ) : (
             <div className="properties-empty">
               <strong>Select a model or body</strong>

@@ -8,6 +8,7 @@ import {
   deserializeShape,
   importSTEP,
   setOC,
+  Solid,
 } from 'replicad'
 
 import {
@@ -83,6 +84,12 @@ interface ImportedBodyData {
   bodySummaries: Array<{
     id: string
     name: string
+  }>
+  renderParts: Array<{
+    id: string
+    name: string
+    faces: ReturnType<CadShape['mesh']>
+    edges: ReturnType<CadShape['meshEdges']>
   }>
 
   faces: ReturnType<CadShape['mesh']>
@@ -285,20 +292,39 @@ function createRenderData(
   )._listTopo('solid')
 
   const bodyCount = Math.max(solidShapes.length, 1)
+  const bodySummaries = Array.from(
+    { length: bodyCount },
+    (_, index) => ({
+      id: `${bodyId}-body-${index + 1}`,
+      name: bodyCount === 1 ? 'Body 1' : `Body ${index + 1}`,
+    }),
+  )
+
+  const renderParts = solidShapes.length > 0
+    ? solidShapes.map((rawSolid, index) => {
+        const solid = new Solid(rawSolid as never)
+        try {
+          return {
+            ...bodySummaries[index],
+            faces: solid.mesh({ tolerance: 0.1, angularTolerance: 0.3 }),
+            edges: solid.meshEdges({ tolerance: 0.1, angularTolerance: 0.3 }),
+          }
+        } finally {
+          solid.delete()
+        }
+      })
+    : [{
+        ...bodySummaries[0],
+        faces: shape.mesh({ tolerance: 0.1, angularTolerance: 0.3 }),
+        edges: shape.meshEdges({ tolerance: 0.1, angularTolerance: 0.3 }),
+      }]
 
   return {
     bodyId,
     fileName,
     editable: true,
-    bodySummaries: Array.from(
-      { length: bodyCount },
-      (_, index) => ({
-        id: `${bodyId}-body-${index + 1}`,
-        name: bodyCount === 1
-          ? 'Body 1'
-          : `Body ${index + 1}`,
-      }),
-    ),
+    bodySummaries,
+    renderParts,
 
     faces: shape.mesh({
       tolerance: 0.1,
@@ -321,6 +347,7 @@ function createMeshRenderData(
   const normals: number[] = []
   const triangles: number[] = []
   const lines: number[] = []
+  const renderParts: ImportedBodyData['renderParts'] = []
 
   for (const part of parts) {
     const { geometry } = part
@@ -334,10 +361,24 @@ function createMeshRenderData(
     const index = geometry.getIndex()
     const vertexOffset = vertices.length / 3
     const edgeGeometry = new EdgesGeometry(geometry, 15)
+    const partId = `${bodyId}-mesh-${renderParts.length + 1}`
+    const partName = part.name || `Mesh ${renderParts.length + 1}`
+    const partVertices = Array.from(position.array)
+    const partNormals = Array.from(normal.array)
+    const partTriangles = index
+      ? Array.from(index.array, Number)
+      : Array.from({ length: position.count }, (_, triangleIndex) => triangleIndex)
+    const partLines = Array.from(edgeGeometry.getAttribute('position').array)
 
-    vertices.push(...Array.from(position.array))
-    normals.push(...Array.from(normal.array))
-    lines.push(...Array.from(edgeGeometry.getAttribute('position').array))
+    vertices.push(...partVertices)
+    normals.push(...partNormals)
+    lines.push(...partLines)
+    renderParts.push({
+      id: partId,
+      name: partName,
+      faces: { vertices: partVertices, normals: partNormals, triangles: partTriangles, faceGroups: [] },
+      edges: { lines: partLines, edgeGroups: [] },
+    })
 
     if (index) {
       triangles.push(...Array.from(index.array, (value) => Number(value) + vertexOffset))
@@ -363,6 +404,7 @@ function createMeshRenderData(
       id: `${bodyId}-mesh-${index + 1}`,
       name: part.name || `Mesh ${index + 1}`,
     })),
+    renderParts,
     faces: {
       vertices,
       normals,
