@@ -1611,3 +1611,20 @@ textarea:focus-visible {
 .reduction-risk.medium { color: #ffe4a3; background: #493a18; border-color: #806521; }
 .reduction-risk.high { color: #ffd0cb; background: #4b2422; border-color: #8c4842; }
 .conversion-warning { padding: 9px; color: #ffe4a3 !important; background: #493a18; border: 1px solid #806521; border-radius: 7px; }
+
+.sketch-workflow { display: grid; gap: 10px; padding: 12px; border-bottom: 1px solid #395064; }
+.sketch-workflow p, .sketch-workflow small { margin: 0; color: #b8c9d9; font-size: 11px; line-height: 1.4; }
+.plane-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.plane-picker button { display: grid; gap: 4px; min-width: 0; padding: 10px 4px; text-align: center; }
+.plane-picker button span { color: #78baff; font-size: 16px; font-weight: 800; }
+.plane-picker button strong { font-size: 10px; }
+.plane-picker button.selected, .sketch-tools button.selected { color: #fff; background: #176fc5; border-color: #69adf1; }
+.sketch-heading, .sketch-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sketch-heading div, .sketch-summary div { display: grid; gap: 2px; }
+.sketch-summary { padding: 8px; border: 1px solid #40586c; border-radius: 7px; }
+.sketch-summary span { color: #b8c9d9; font-size: 10px; }
+.sketch-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sketch-canvas { width: 100%; aspect-ratio: 4 / 3; overflow: hidden; background: #f7fafc; border: 1px solid #6f879a; border-radius: 6px; cursor: crosshair; touch-action: none; }
+.dimension-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.sketch-workflow label { display: grid; gap: 4px; color: #d9e6f2; font-size: 11px; font-weight: 600; }
+.sketch-workflow .inline-check { display: flex; align-items: center; }

@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
 } from 'react'
 
 import './App.css'
@@ -156,6 +157,7 @@ function formatSignedMillimetres(value: number): string {
   return `${value.toLocaleString('en-US', { maximumFractionDigits: 3 })} mm`
 }
 
+// Kept temporarily for project-history migration while the mouse sketcher becomes the primary creation workflow.
 function FeatureModelEditor({ model, disabled, onChange, onBuild }: {
   model: CadFeatureModel
   disabled: boolean
@@ -195,6 +197,86 @@ function FeatureModelEditor({ model, disabled, onChange, onBuild }: {
     <button type="button" onClick={addFeature}>Add sketch feature</button>
     <button className="primary-button" type="submit" disabled={disabled}>{disabled ? 'Rebuilding…' : 'Build feature history'}</button>
     <small>Features are rebuilt locally in order and preserved in project recovery.</small>
+  </form>
+}
+
+void FeatureModelEditor
+
+function SketchCreator({ model, disabled, onChange, onBuild }: {
+  model: CadFeatureModel; disabled: boolean; onChange: (model: CadFeatureModel) => void; onBuild: () => void
+}) {
+  const [stage, setStage] = useState<'plane' | 'sketch' | 'extrude'>('plane')
+  const [plane, setPlane] = useState<SketchExtrudeFeature['plane']>('XY')
+  const [tool, setTool] = useState<'rectangle' | 'circle'>('rectangle')
+  const [drag, setDrag] = useState<{ start: [number, number]; end: [number, number] } | null>(null)
+  const feature = model.features.at(-1)!
+  const replaceFeature = (next: SketchExtrudeFeature) => onChange({
+    version: 1, features: model.features.map((item, index) => index === model.features.length - 1 ? next : item),
+  })
+  const startSketch = () => {
+    const next: SketchExtrudeFeature = {
+      id: `feature-${crypto.randomUUID()}`, type: 'sketchExtrude', name: 'Boss-Extrude1', plane,
+      profile: { type: 'rectangle', width: 60, height: 40 }, operation: 'boss', length: 10, reversed: false,
+    }
+    onChange({ version: 1, features: [next] })
+    setDrag(null)
+    setStage('sketch')
+  }
+  const point = (event: ReactPointerEvent<SVGSVGElement>): [number, number] => {
+    const box = event.currentTarget.getBoundingClientRect()
+    return [(event.clientX - box.left) * 320 / box.width, (event.clientY - box.top) * 240 / box.height]
+  }
+  const finish = (end: [number, number]) => {
+    if (!drag) return
+    const dx = Math.abs(end[0] - drag.start[0]); const dy = Math.abs(end[1] - drag.start[1])
+    replaceFeature({ ...feature, plane, profile: tool === 'rectangle'
+      ? { type: 'rectangle', width: Math.max(1, Math.round(dx)), height: Math.max(1, Math.round(dy)) }
+      : { type: 'circle', radius: Math.max(0.5, Math.round(Math.hypot(dx, dy) * 10) / 10) } })
+    setDrag({ start: drag.start, end })
+  }
+  if (stage === 'plane') return <section className="sketch-workflow">
+    <span className="panel-label">New part · Select sketch plane</span>
+    <p>Choose a plane, then draw the first sketch with the mouse.</p>
+    <div className="plane-picker">
+      {([['XY', 'Top'], ['XZ', 'Front'], ['YZ', 'Right']] as const).map(([value, label]) =>
+        <button className={plane === value ? 'selected' : ''} type="button" key={value} onClick={() => setPlane(value)}><span>{value}</span><strong>{label} plane</strong></button>)}
+    </div>
+    <button className="primary-button" type="button" onClick={startSketch}>Start sketch</button>
+  </section>
+  if (stage === 'sketch') {
+    const preview = drag ?? { start: [110, 85] as [number, number], end: tool === 'rectangle' ? [210, 155] as [number, number] : [170, 85] as [number, number] }
+    const dx = Math.abs(preview.end[0] - preview.start[0]); const dy = Math.abs(preview.end[1] - preview.start[1])
+    return <section className="sketch-workflow">
+      <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
+      <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
+        <button className={tool === 'rectangle' ? 'selected' : ''} type="button" onClick={() => { setTool('rectangle'); setDrag(null) }}>▭ Rectangle</button>
+        <button className={tool === 'circle' ? 'selected' : ''} type="button" onClick={() => { setTool('circle'); setDrag(null) }}>○ Circle</button>
+      </div>
+      <svg className="sketch-canvas" viewBox="0 0 320 240"
+        onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); const start = point(event); setDrag({ start, end: start }) }}
+        onPointerMove={(event) => { if (drag && event.currentTarget.hasPointerCapture(event.pointerId)) setDrag({ ...drag, end: point(event) }) }}
+        onPointerUp={(event) => { const end = point(event); finish(end); event.currentTarget.releasePointerCapture(event.pointerId) }}>
+        <defs><pattern id="sketch-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#d5e1eb" strokeWidth=".6" /></pattern></defs>
+        <rect width="320" height="240" fill="url(#sketch-grid)" /><path d="M160 0V240M0 120H320" stroke="#789dbb" /><circle cx="160" cy="120" r="3" fill="#d33" />
+        {tool === 'rectangle'
+          ? <rect x={Math.min(preview.start[0], preview.end[0])} y={Math.min(preview.start[1], preview.end[1])} width={dx} height={dy} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />
+          : <circle cx={preview.start[0]} cy={preview.start[1]} r={Math.hypot(dx, dy)} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />}
+      </svg>
+      <small>Click and drag in the sketch. Enter exact dimensions after exiting.</small>
+      <button className="primary-button" type="button" disabled={!drag || (dx < 1 && dy < 1)} onClick={() => setStage('extrude')}>Exit sketch</button>
+    </section>
+  }
+  return <form className="sketch-workflow" onSubmit={(event) => { event.preventDefault(); onBuild() }}>
+    <span className="panel-label">Boss-Extrude</span>
+    <div className="sketch-summary"><div><strong>Sketch1</strong><span>{feature.plane} · {feature.profile.type === 'rectangle' ? `${feature.profile.width} × ${feature.profile.height} mm` : `Ø ${feature.profile.radius * 2} mm`}</span></div><button type="button" onClick={() => setStage('sketch')}>Edit sketch</button></div>
+    {feature.profile.type === 'rectangle' ? <div className="dimension-grid">
+      <label><span>Width (mm)</span><input type="number" min="0.01" step="0.01" value={feature.profile.width} onChange={(event) => feature.profile.type === 'rectangle' && replaceFeature({ ...feature, profile: { ...feature.profile, width: Number(event.target.value) } })} /></label>
+      <label><span>Height (mm)</span><input type="number" min="0.01" step="0.01" value={feature.profile.height} onChange={(event) => feature.profile.type === 'rectangle' && replaceFeature({ ...feature, profile: { ...feature.profile, height: Number(event.target.value) } })} /></label>
+    </div> : <label><span>Diameter (mm)</span><input type="number" min="0.01" step="0.01" value={feature.profile.radius * 2} onChange={(event) => feature.profile.type === 'circle' && replaceFeature({ ...feature, profile: { type: 'circle', radius: Number(event.target.value) / 2 } })} /></label>}
+    <label><span>Depth (mm)</span><input type="number" min="0.01" step="0.01" value={feature.length} onChange={(event) => replaceFeature({ ...feature, length: Number(event.target.value) })} /></label>
+    <label className="inline-check"><input type="checkbox" checked={feature.reversed} onChange={(event) => replaceFeature({ ...feature, reversed: event.target.checked })} /><span>Reverse direction</span></label>
+    <button className="primary-button" type="submit" disabled={disabled}>{disabled ? 'Building…' : 'Build feature'}</button>
+    <small>Sketch and feature dimensions remain editable in this local project.</small>
   </form>
 }
 
@@ -259,7 +341,7 @@ function App() {
   })
   const [primitiveBodyId, setPrimitiveBodyId] = useState<string | null>(null)
   const [isCreatingPrimitive, setIsCreatingPrimitive] = useState(false)
-  const [createMode, setCreateMode] = useState<'primitive' | 'features'>('primitive')
+  const [createMode, setCreateMode] = useState<'primitive' | 'features'>('features')
   const [featureModel, setFeatureModel] = useState<CadFeatureModel>({
     version: 1,
     features: [{ id: 'feature-1', type: 'sketchExtrude', name: 'Boss-Extrude1', plane: 'XY', profile: { type: 'rectangle', width: 100, height: 60 }, operation: 'boss', length: 10, reversed: false }],
@@ -1803,7 +1885,7 @@ function App() {
             <>
               <div className="primitive-panel">
                 <label><span>Create type</span><select value={createMode} onChange={(event) => setCreateMode(event.target.value as 'primitive' | 'features')}>
-                  <option value="primitive">Primitive</option><option value="features">Sketch features</option>
+                  <option value="features">Sketch and extrude</option><option value="primitive">Quick primitive</option>
                 </select></label>
               </div>
               {createMode === 'primitive' ? <form className="primitive-panel" onSubmit={(event) => { event.preventDefault(); void applyPrimitive() }}>
@@ -1870,7 +1952,7 @@ function App() {
                 {isCreatingPrimitive ? 'Building…' : primitiveBodyId && model?.bodyId === primitiveBodyId ? 'Update part' : 'Create part'}
               </button>
               <small>Created locally · Editable dimensions during this session</small>
-              </form> : <FeatureModelEditor model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} />}
+              </form> : <SketchCreator model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} />}
             </>
           )}
 
