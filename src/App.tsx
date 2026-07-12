@@ -13,13 +13,16 @@ import { LandingPage } from './marketing/LandingPage'
 import {
   disposeCadBody,
   createCadPrimitive,
+  createCadFeatureModel,
   importStepFile,
   restoreCadProject,
   serializeCadProject,
   updateCadPrimitive,
+  updateCadFeatureModel,
   type ImportedCadBody,
 } from './cad/cadClient'
 import type { CadPrimitive } from './cad/primitive'
+import type { CadFeatureModel, SketchExtrudeFeature } from './cad/featureModel'
 
 import {
   CAD_LAB_PROJECT_EXTENSION,
@@ -48,6 +51,7 @@ import {
 import {
   CadViewport,
   type MeasurementSummary,
+  type MeasurementMode,
   type ViewCommand,
   type ViewCommandType,
 } from './viewer/CadViewport'
@@ -152,6 +156,48 @@ function formatSignedMillimetres(value: number): string {
   return `${value.toLocaleString('en-US', { maximumFractionDigits: 3 })} mm`
 }
 
+function FeatureModelEditor({ model, disabled, onChange, onBuild }: {
+  model: CadFeatureModel
+  disabled: boolean
+  onChange: (model: CadFeatureModel) => void
+  onBuild: () => void
+}) {
+  const update = (index: number, feature: SketchExtrudeFeature) => onChange({ version: 1, features: model.features.map((item, itemIndex) => itemIndex === index ? feature : item) })
+  const addFeature = () => {
+    const number = model.features.length + 1
+    onChange({ version: 1, features: [...model.features, {
+      id: `feature-${crypto.randomUUID()}`, type: 'sketchExtrude', name: `Cut-Extrude${number}`, plane: 'XY',
+      profile: { type: 'circle', radius: 8 }, operation: 'cut', length: 10, reversed: false,
+    }] })
+  }
+  return <form className="primitive-panel" onSubmit={(event) => { event.preventDefault(); onBuild() }}>
+    <span className="panel-label">Parametric feature history</span>
+    {model.features.map((feature, index) => <fieldset key={feature.id}>
+      <legend>{index + 1}. {feature.name}</legend>
+      <label><span>Name</span><input required value={feature.name} onChange={(event) => update(index, { ...feature, name: event.target.value })} /></label>
+      <label><span>Plane</span><select value={feature.plane} onChange={(event) => update(index, { ...feature, plane: event.target.value as SketchExtrudeFeature['plane'] })}>
+        <option value="XY">Top (XY)</option><option value="XZ">Front (XZ)</option><option value="YZ">Right (YZ)</option>
+      </select></label>
+      <label><span>Profile</span><select value={feature.profile.type} onChange={(event) => update(index, { ...feature, profile: event.target.value === 'rectangle' ? { type: 'rectangle', width: 100, height: 60 } : { type: 'circle', radius: 20 } })}>
+        <option value="rectangle">Centered rectangle</option><option value="circle">Centered circle</option>
+      </select></label>
+      {feature.profile.type === 'rectangle' ? <>
+        <label><span>Width (mm)</span><input type="number" min="0.01" max="1000000" step="0.01" required value={feature.profile.width} onChange={(event) => feature.profile.type === 'rectangle' && update(index, { ...feature, profile: { type: 'rectangle', width: Number(event.target.value), height: feature.profile.height } })} /></label>
+        <label><span>Height (mm)</span><input type="number" min="0.01" max="1000000" step="0.01" required value={feature.profile.height} onChange={(event) => feature.profile.type === 'rectangle' && update(index, { ...feature, profile: { type: 'rectangle', width: feature.profile.width, height: Number(event.target.value) } })} /></label>
+      </> : <label><span>Radius (mm)</span><input type="number" min="0.01" max="1000000" step="0.01" required value={feature.profile.radius} onChange={(event) => feature.profile.type === 'circle' && update(index, { ...feature, profile: { type: 'circle', radius: Number(event.target.value) } })} /></label>}
+      <label><span>Operation</span><select disabled={index === 0} value={feature.operation} onChange={(event) => update(index, { ...feature, operation: event.target.value as 'boss' | 'cut' })}>
+        <option value="boss">Boss extrude</option><option value="cut">Cut extrude</option>
+      </select></label>
+      <label><span>Length (mm)</span><input type="number" min="0.01" max="1000000" step="0.01" required value={feature.length} onChange={(event) => update(index, { ...feature, length: Number(event.target.value) })} /></label>
+      <label><input type="checkbox" checked={feature.reversed} onChange={(event) => update(index, { ...feature, reversed: event.target.checked })} /> <span>Reverse direction</span></label>
+      {index > 0 && <button type="button" onClick={() => onChange({ version: 1, features: model.features.filter((_, itemIndex) => itemIndex !== index) })}>Remove feature</button>}
+    </fieldset>)}
+    <button type="button" onClick={addFeature}>Add sketch feature</button>
+    <button className="primary-button" type="submit" disabled={disabled}>{disabled ? 'Rebuilding…' : 'Build feature history'}</button>
+    <small>Features are rebuilt locally in order and preserved in project recovery.</small>
+  </form>
+}
+
 function App() {
   const fileInputRef =
     useRef<HTMLInputElement>(null)
@@ -213,7 +259,14 @@ function App() {
   })
   const [primitiveBodyId, setPrimitiveBodyId] = useState<string | null>(null)
   const [isCreatingPrimitive, setIsCreatingPrimitive] = useState(false)
+  const [createMode, setCreateMode] = useState<'primitive' | 'features'>('primitive')
+  const [featureModel, setFeatureModel] = useState<CadFeatureModel>({
+    version: 1,
+    features: [{ id: 'feature-1', type: 'sketchExtrude', name: 'Boss-Extrude1', plane: 'XY', profile: { type: 'rectangle', width: 100, height: 60 }, operation: 'boss', length: 10, reversed: false }],
+  })
+  const [featureModelBodyId, setFeatureModelBodyId] = useState<string | null>(null)
   const [measurementSummary, setMeasurementSummary] = useState<MeasurementSummary>({ selections: [] })
+  const [measurementMode, setMeasurementMode] = useState<MeasurementMode>('auto')
 
   const [selectedPartIds, setSelectedPartIds] = useState<Set<string>>(() => new Set())
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(() => new Set())
@@ -356,6 +409,13 @@ function App() {
     } else {
       setPrimitiveBodyId(null)
     }
+    if (nextModel.featureModel) {
+      setFeatureModel(nextModel.featureModel)
+      setFeatureModelBodyId(nextModel.bodyId)
+      setCreateMode('features')
+    } else {
+      setFeatureModelBodyId(null)
+    }
   }
 
   function togglePartVisibility(partId: string) {
@@ -434,6 +494,29 @@ function App() {
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'The part could not be created.')
       setStatus('Part creation failed')
+    } finally {
+      setIsCreatingPrimitive(false)
+    }
+  }
+
+  async function applyFeatureModel(): Promise<void> {
+    if (isCreatingPrimitive) return
+    setIsCreatingPrimitive(true)
+    setError(null)
+    try {
+      const previousBodyId = model?.bodyId
+      const nextModel = featureModelBodyId && model?.bodyId === featureModelBodyId
+        ? await updateCadFeatureModel(featureModelBodyId, featureModel)
+        : await createCadFeatureModel(featureModel)
+      installModel(nextModel)
+      setFileName(nextModel.fileName)
+      setStatus(`${nextModel.fileName} feature history rebuilt locally`)
+      await releaseSupersededCadBody(previousBodyId, nextModel.bodyId)
+      await saveImportedModelRecovery(nextModel)
+      window.setTimeout(() => sendViewCommand('fit'), 100)
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'The feature model could not be built.')
+      setStatus('Feature rebuild failed')
     } finally {
       setIsCreatingPrimitive(false)
     }
@@ -1578,6 +1661,7 @@ function App() {
               partColors={partColors}
               partOpacities={partOpacities}
               measurementEnabled={activeTool === 'measure'}
+              measurementMode={measurementMode}
               onMeasurementChange={setMeasurementSummary}
               onSelectPart={selectPart}
               onClearSelection={() => setSelectedPartIds(new Set())}
@@ -1716,7 +1800,13 @@ function App() {
           </header>
 
           {activeTool === 'create' && (
-            <form className="primitive-panel" onSubmit={(event) => { event.preventDefault(); void applyPrimitive() }}>
+            <>
+              <div className="primitive-panel">
+                <label><span>Create type</span><select value={createMode} onChange={(event) => setCreateMode(event.target.value as 'primitive' | 'features')}>
+                  <option value="primitive">Primitive</option><option value="features">Sketch features</option>
+                </select></label>
+              </div>
+              {createMode === 'primitive' ? <form className="primitive-panel" onSubmit={(event) => { event.preventDefault(); void applyPrimitive() }}>
               <span className="panel-label">Local solid creation</span>
               <label>
                 <span>Primitive</span>
@@ -1780,7 +1870,8 @@ function App() {
                 {isCreatingPrimitive ? 'Building…' : primitiveBodyId && model?.bodyId === primitiveBodyId ? 'Update part' : 'Create part'}
               </button>
               <small>Created locally · Editable dimensions during this session</small>
-            </form>
+              </form> : <FeatureModelEditor model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} />}
+            </>
           )}
 
           {model ? (
@@ -1788,6 +1879,18 @@ function App() {
               {activeTool === 'measure' && measuredProperties && (
                 <section className="measurement-properties">
                   <span className="panel-label">Measure</span>
+                  <label className="measurement-mode-field">
+                    <span>Method</span>
+                    <select value={measurementMode} onChange={(event) => {
+                      setMeasurementMode(event.target.value as MeasurementMode)
+                      setMeasurementSummary({ selections: [] })
+                    }}>
+                      <option value="auto">Auto select</option>
+                      <option value="point">Point to point</option>
+                      <option value="face">Face / Plane</option>
+                      <option value="edge">Edge / Line</option>
+                    </select>
+                  </label>
                   <div className="measurement-selection-list">
                     <span>Selected</span>
                     <strong>{measurementSummary.selections.length

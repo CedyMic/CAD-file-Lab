@@ -2,6 +2,7 @@ import type {
   SerializedCadProject,
 } from './cadClient'
 import { validateCadPrimitive } from './primitive.ts'
+import { validateCadFeatureModel } from './featureModel.ts'
 
 import type {
   DisplaySettings,
@@ -114,13 +115,11 @@ function isSerializedProject(
     value.savedAt > 0
   )
   if (!coreIsValid) return false
-  if (value.primitive === undefined) return true
   try {
-    validateCadPrimitive(value.primitive as never)
+    if (value.primitive !== undefined) validateCadPrimitive(value.primitive as never)
+    if (value.featureModel !== undefined) validateCadFeatureModel(value.featureModel as never)
     return true
-  } catch {
-    return false
-  }
+  } catch { return false }
 }
 
 export function createCadLabProjectFile(

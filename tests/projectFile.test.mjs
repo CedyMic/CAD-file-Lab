@@ -75,6 +75,17 @@ test('preserves editable primitive parameters and rejects invalid metadata', () 
   expectInvalid(file)
 })
 
+test('preserves feature history metadata and rejects invalid histories', () => {
+  const file = createValidProjectFile()
+  file.project.featureModel = { version: 1, features: [{
+    id: 'base', type: 'sketchExtrude', name: 'Base', plane: 'XZ',
+    profile: { type: 'rectangle', width: 80, height: 40 }, operation: 'boss', length: 12, reversed: false,
+  }] }
+  assert.deepEqual(parseCadLabProjectFile(JSON.stringify(file)).project.featureModel, file.project.featureModel)
+  file.project.featureModel.features[0].operation = 'cut'
+  expectInvalid(file)
+})
+
 test('rejects malformed JSON with a user-facing error', () => {
   assert.throws(
     () => parseCadLabProjectFile('{not-json'),

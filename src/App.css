@@ -460,6 +460,8 @@ textarea:focus-visible {
 .measurement-properties small { color: #9fb3c5; }
 .measurement-properties div strong { color: #e5f1fa; text-align: right; }
 .measurement-properties small { font-size: 9px; line-height: 1.35; }
+.measurement-mode-field { display: grid; grid-template-columns: 1fr 130px; align-items: center; gap: 8px; color: #c8d6e2; font-size: 11px; }
+.measurement-mode-field select { width: 100%; min-width: 0; }
 
 .primitive-panel { display: grid; gap: 8px; padding: 11px 14px; background: #182731; border-bottom: 1px solid #344553; }
 .primitive-panel label { display: grid; grid-template-columns: 1fr 112px; align-items: center; gap: 8px; color: #c8d6e2; font-size: 11px; font-weight: 650; }

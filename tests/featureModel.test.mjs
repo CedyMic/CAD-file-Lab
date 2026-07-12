@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { getFeatureModelFileName, validateCadFeatureModel } from '../src/cad/featureModel.ts'
+
+const boss = {
+  id: 'feature-1', type: 'sketchExtrude', name: 'Base plate', plane: 'XY',
+  profile: { type: 'rectangle', width: 100, height: 60 }, operation: 'boss', length: 10, reversed: false,
+}
+
+test('validates dimensioned sketch boss and cut history', () => {
+  const input = { version: 1, features: [boss, {
+    id: 'feature-2', type: 'sketchExtrude', name: 'Mounting hole', plane: 'XY',
+    profile: { type: 'circle', radius: 8 }, operation: 'cut', length: 10, reversed: false,
+  }] }
+  const result = validateCadFeatureModel(input)
+  assert.deepEqual(result, input)
+  assert.notEqual(result, input)
+  assert.equal(getFeatureModelFileName(result), 'Base-plate.step')
+})
+
+test('supports all principal sketch planes and reversed extrusions', () => {
+  for (const plane of ['XY', 'XZ', 'YZ']) {
+    const result = validateCadFeatureModel({ version: 1, features: [{ ...boss, plane, reversed: true }] })
+    assert.equal(result.features[0].plane, plane)
+    assert.equal(result.features[0].reversed, true)
+  }
+})
+
+test('rejects unsafe or non-buildable histories', () => {
+  assert.throws(() => validateCadFeatureModel({ version: 1, features: [] }), /at least one/)
+  assert.throws(() => validateCadFeatureModel({ version: 1, features: [{ ...boss, operation: 'cut' }] }), /first feature.*boss/i)
+  assert.throws(() => validateCadFeatureModel({ version: 1, features: [{ ...boss, length: 0 }] }), /Extrude length/)
+  assert.throws(() => validateCadFeatureModel({ version: 1, features: [boss, { ...boss }] }), /unique/)
+})

@@ -66,7 +66,10 @@ interface CadViewportProps {
   onClearSelection?: () => void
   measurementEnabled?: boolean
   onMeasurementChange?: (summary: MeasurementSummary) => void
+  measurementMode?: MeasurementMode
 }
+
+export type MeasurementMode = 'auto' | 'point' | 'face' | 'edge'
 
 export interface MeasurementSummary {
   selections: string[]
@@ -235,6 +238,7 @@ function ImportedPart({
   onSelect,
   onMeasurePoint,
   onMeasureLine,
+  measurementMode,
 }: {
   part: CadRenderPart
   settings: DisplaySettings
@@ -244,7 +248,8 @@ function ImportedPart({
   opacity: number
   onSelect: (additive: boolean) => void
   onMeasurePoint?: (sample: FaceSample) => void
-  onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number) => void
+  onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number, entityId: string) => void
+  measurementMode: MeasurementMode
 }) {
   const faceGeometry =
     useMemo(() => {
@@ -353,6 +358,7 @@ function ImportedPart({
         onClick={(event) => {
           event.stopPropagation()
           if (onMeasurePoint) {
+            if (measurementMode === 'edge') return
             const normal = event.face?.normal.clone()
             if (!normal) return
             normal.applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(event.object.matrixWorld))
@@ -381,8 +387,8 @@ function ImportedPart({
               point: [event.point.x, event.point.y, event.point.z],
               normal: [normal.x, normal.y, normal.z],
               triangle,
-              surfaceTriangles: surfaceTriangles.length ? surfaceTriangles : triangle,
-              entityId: faceGroup ? `${part.id}-face-${faceGroup.faceId}` : `${part.id}-triangle-${event.faceIndex ?? 0}`,
+              surfaceTriangles: measurementMode === 'point' ? undefined : surfaceTriangles.length ? surfaceTriangles : undefined,
+              entityId: measurementMode === 'point' ? undefined : faceGroup ? `${part.id}-face-${faceGroup.faceId}` : undefined,
             })
             return
           }
@@ -414,6 +420,7 @@ function ImportedPart({
           geometry={edgeGeometry}
           onClick={(event) => {
             if (!onMeasureLine) return
+            if (measurementMode === 'point' || measurementMode === 'face') return
             event.stopPropagation()
             const position = edgeGeometry.getAttribute('position')
             const hitIndex = Math.max(0, Math.min(event.index ?? 0, position.count - 2))
@@ -428,7 +435,7 @@ function ImportedPart({
             for (let index = 0; index + 1 < vertices.length; index += 2) {
               length += new THREE.Vector3(...vertices[index]).distanceTo(new THREE.Vector3(...vertices[index + 1]))
             }
-            onMeasureLine(vertices[0], vertices[vertices.length - 1], vertices, length)
+            onMeasureLine(vertices[0], vertices[vertices.length - 1], vertices, length, `${part.id}-edge-${group?.edgeId ?? hitIndex}`)
           }}
         >
           <lineBasicMaterial
@@ -465,6 +472,7 @@ function ImportedModel({
   onSelectPart,
   onMeasurePoint,
   onMeasureLine,
+  measurementMode,
 }: {
   model: ImportedCadBody
   settings: DisplaySettings
@@ -474,7 +482,8 @@ function ImportedModel({
   partOpacities: ReadonlyMap<string, number>
   onSelectPart: (partId: string, additive: boolean) => void
   onMeasurePoint?: (sample: FaceSample) => void
-  onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number) => void
+  onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number, entityId: string) => void
+  measurementMode: MeasurementMode
 }) {
   const modelPosition = useMemo(() => {
     const positions = convertZUpToYUp(model.faces.vertices)
@@ -504,6 +513,7 @@ function ImportedModel({
             onSelect={(additive) => onSelectPart(part.id, additive)}
             onMeasurePoint={onMeasurePoint}
             onMeasureLine={onMeasureLine}
+            measurementMode={measurementMode}
           />
         )
       ))}
@@ -623,6 +633,7 @@ function MeasurableImportedModel({
   partOpacities,
   onSelectPart,
   onMeasurementChange,
+  measurementMode,
 }: {
   model: ImportedCadBody
   settings: DisplaySettings
@@ -632,6 +643,7 @@ function MeasurableImportedModel({
   partOpacities: ReadonlyMap<string, number>
   onSelectPart: (partId: string, additive: boolean) => void
   onMeasurementChange?: (summary: MeasurementSummary) => void
+  measurementMode: MeasurementMode
 }) {
   const [measurement, setMeasurement] = useState({
     distance: emptyDistanceMeasurement,
@@ -640,11 +652,12 @@ function MeasurableImportedModel({
     lineVertices: [] as MeasurementPoint[],
     lineLength: undefined as number | undefined,
     radius: undefined as number | undefined,
+    lineEntityId: undefined as string | undefined,
   })
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined })
+      if (event.key === 'Escape') setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined, lineEntityId: undefined })
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -688,24 +701,29 @@ function MeasurableImportedModel({
         partColors={partColors}
         partOpacities={partOpacities}
         onSelectPart={onSelectPart}
+        measurementMode={measurementMode}
         onMeasurePoint={(sample) => {
           setMeasurement((current) => {
             const existing = current.faces.length === 1 ? current.faces[0] : null
-            const sameFace = existing?.entityId === sample.entityId
-            if (sameFace) return { distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined }
+            if (measurementMode === 'face' && !sample.entityId) return current
+            const sameFace = Boolean(existing?.entityId && sample.entityId && existing.entityId === sample.entityId)
+            if (sameFace) return { distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined, lineEntityId: undefined }
             const restart = current.distance.points.length >= 2
             return {
               distance: addDistancePoint(current.distance, sample.point),
-              faces: restart ? [sample] : [...current.faces, sample],
+              faces: measurementMode === 'point' ? [] : restart ? [sample] : [...current.faces, sample],
               kind: 'points',
               lineVertices: [],
               lineLength: undefined,
               radius: undefined,
+              lineEntityId: undefined,
             }
           })
         }}
-        onMeasureLine={(first, second, vertices, length) => {
-          setMeasurement({ distance: { points: [first, second] }, faces: [], kind: 'line', lineVertices: vertices, lineLength: length, radius: circularPolylineRadius(vertices) ?? undefined })
+        onMeasureLine={(first, second, vertices, length, entityId) => {
+          setMeasurement((current) => current.lineEntityId === entityId
+            ? { distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined, lineEntityId: undefined }
+            : { distance: { points: [first, second] }, faces: [], kind: 'line', lineVertices: vertices, lineLength: length, radius: circularPolylineRadius(vertices) ?? undefined, lineEntityId: entityId })
         }}
       />
       <DistanceAnnotation
@@ -714,7 +732,7 @@ function MeasurableImportedModel({
         kind={measurement.kind}
         lineVertices={measurement.lineVertices}
         lineLength={measurement.lineLength}
-        onReset={() => setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined })}
+        onReset={() => setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined, lineEntityId: undefined })}
       />
     </>
   )
@@ -915,6 +933,7 @@ export function CadViewport({
   onClearSelection = () => undefined,
   measurementEnabled = false,
   onMeasurementChange,
+  measurementMode = 'auto',
 }: CadViewportProps) {
   const [measurementResetId, setMeasurementResetId] = useState(0)
   const lightStrength =
@@ -1049,7 +1068,7 @@ export function CadViewport({
         <>
           {measurementEnabled ? (
             <MeasurableImportedModel
-              key={`${model.bodyId}-${measurementResetId}`}
+              key={`${model.bodyId}-${measurementResetId}-${measurementMode}`}
               model={model}
               settings={settings}
               hiddenPartIds={hiddenPartIds}
@@ -1058,10 +1077,12 @@ export function CadViewport({
               partOpacities={partOpacities}
               onSelectPart={onSelectPart}
               onMeasurementChange={onMeasurementChange}
+              measurementMode={measurementMode}
             />
           ) : (
             <ImportedModel
               model={model}
+              measurementMode="auto"
               settings={settings}
               hiddenPartIds={hiddenPartIds}
               selectedPartIds={selectedPartIds}

@@ -10,6 +10,7 @@ import {
   deserializeShape,
   importSTEP,
   drawCircle,
+  drawRectangle,
   makeBox,
   makeCylinder,
   makeSphere,
@@ -34,6 +35,7 @@ import {
 } from './stepImportFile'
 
 import { getPrimitiveFileName, validateCadPrimitive, type CadPrimitive } from './primitive'
+import { getFeatureModelFileName, validateCadFeatureModel, type CadFeatureModel, type SketchExtrudeFeature } from './featureModel'
 
 import {
   createAsyncOperationQueue,
@@ -59,6 +61,7 @@ export interface SerializedCadProject {
   serializedShape: string
   savedAt: number
   primitive?: CadPrimitive
+  featureModel?: CadFeatureModel
 }
 
 interface ImportStepRequest {
@@ -87,6 +90,8 @@ interface DisposeBodyRequest {
 
 interface CreatePrimitiveRequest { id: string; action: 'createPrimitive'; primitive: CadPrimitive }
 interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId: string; primitive: CadPrimitive }
+interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureModel }
+interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
 
 type WorkerRequest =
   | ImportStepRequest
@@ -94,6 +99,8 @@ type WorkerRequest =
   | RestoreProjectRequest
   | CreatePrimitiveRequest
   | UpdatePrimitiveRequest
+  | CreateFeatureModelRequest
+  | UpdateFeatureModelRequest
   | DisposeBodyRequest
 
 interface ImportedBodyData {
@@ -115,6 +122,7 @@ interface ImportedBodyData {
 
   edges: ReturnType<CadShape['meshEdges']>
   primitive?: CadPrimitive
+  featureModel?: CadFeatureModel
 }
 
 interface DisposedBodyData {
@@ -158,6 +166,9 @@ const bodyFileNames =
 
 const bodyPrimitives =
   new Map<string, CadPrimitive>()
+
+const bodyFeatureModels =
+  new Map<string, CadFeatureModel>()
 
 const enqueueCadOperation =
   createAsyncOperationQueue()
@@ -552,6 +563,7 @@ function serializeProject(
       shape.serialize(),
     savedAt: Date.now(),
     primitive: bodyPrimitives.get(bodyId),
+    featureModel: bodyFeatureModels.get(bodyId),
   }
 }
 
@@ -619,7 +631,11 @@ async function restoreProject(
     ? validateCadPrimitive(project.primitive)
     : undefined
   if (primitive) bodyPrimitives.set(project.bodyId, primitive)
-  return primitive ? { ...body, primitive } : body
+  const featureModel = project.featureModel
+    ? validateCadFeatureModel(project.featureModel)
+    : undefined
+  if (featureModel) bodyFeatureModels.set(project.bodyId, featureModel)
+  return { ...body, ...(primitive ? { primitive } : {}), ...(featureModel ? { featureModel } : {}) }
 }
 
 function disposeBody(
@@ -633,6 +649,7 @@ function disposeBody(
     bodies.delete(bodyId)
     bodyFileNames.delete(bodyId)
     bodyPrimitives.delete(bodyId)
+    bodyFeatureModels.delete(bodyId)
   }
 
   return {
@@ -700,6 +717,70 @@ async function updatePrimitive(
   }
 }
 
+function makeSketchExtrusion(feature: SketchExtrudeFeature): Solid {
+  const drawing = feature.profile.type === 'rectangle'
+    ? drawRectangle(feature.profile.width, feature.profile.height)
+    : drawCircle(feature.profile.radius)
+  const sketch = drawing.sketchOnPlane(feature.plane)
+  return sketch.extrude(feature.reversed ? -feature.length : feature.length) as Solid
+}
+
+function makeFeatureModelShape(featureModelInput: CadFeatureModel): CadShape {
+  const featureModel = validateCadFeatureModel(featureModelInput)
+  let result: Solid | null = null
+  try {
+    for (const feature of featureModel.features) {
+      const tool = makeSketchExtrusion(feature)
+      if (!result) {
+        result = tool
+        continue
+      }
+      const previous: Solid = result
+      try {
+        result = feature.operation === 'boss' ? previous.fuse(tool) : previous.cut(tool)
+      } finally {
+        previous.delete()
+        tool.delete()
+      }
+    }
+    if (!result || result.isNull) throw new Error('The feature history produced an empty solid.')
+    return result
+  } catch (error) {
+    result?.delete()
+    throw error
+  }
+}
+
+async function createFeatureModel(featureModelInput: CadFeatureModel): Promise<ImportedBodyData> {
+  const featureModel = validateCadFeatureModel(featureModelInput)
+  await initializeCadKernel()
+  const bodyId = crypto.randomUUID()
+  const body = registerBodyAfterMeshing(bodyId, getFeatureModelFileName(featureModel), makeFeatureModelShape(featureModel))
+  bodyFeatureModels.set(bodyId, featureModel)
+  return { ...body, featureModel }
+}
+
+async function updateFeatureModel(bodyId: string, featureModelInput: CadFeatureModel): Promise<ImportedBodyData> {
+  getBody(bodyId)
+  const featureModel = validateCadFeatureModel(featureModelInput)
+  await initializeCadKernel()
+  const replacement = makeFeatureModelShape(featureModel)
+  const fileName = getFeatureModelFileName(featureModel)
+  try {
+    const renderData = createRenderData(bodyId, fileName, replacement)
+    const previous = bodies.get(bodyId)
+    bodies.set(bodyId, replacement)
+    bodyFileNames.set(bodyId, fileName)
+    bodyFeatureModels.set(bodyId, featureModel)
+    bodyPrimitives.delete(bodyId)
+    previous?.delete()
+    return { ...renderData, featureModel }
+  } catch (error) {
+    replacement.delete()
+    throw error
+  }
+}
+
 function registerBodyAfterMeshing(
   bodyId: string,
   fileName: string,
@@ -755,6 +836,12 @@ async function handleRequest(
 
     case 'updatePrimitive':
       return updatePrimitive(request.bodyId, request.primitive)
+
+    case 'createFeatureModel':
+      return createFeatureModel(request.featureModel)
+
+    case 'updateFeatureModel':
+      return updateFeatureModel(request.bodyId, request.featureModel)
 
     case 'disposeBody':
       return disposeBody(

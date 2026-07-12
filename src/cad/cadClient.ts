@@ -1,4 +1,5 @@
 import type { CadPrimitive } from './primitive'
+import type { CadFeatureModel } from './featureModel'
 
 export interface CadFaceMesh {
   vertices: number[] | Float32Array
@@ -31,6 +32,7 @@ export interface ImportedCadBody {
   faces: CadFaceMesh
   edges: CadEdgeMesh
   primitive?: CadPrimitive
+  featureModel?: CadFeatureModel
 }
 
 export interface SerializedCadProject {
@@ -40,6 +42,7 @@ export interface SerializedCadProject {
   serializedShape: string
   savedAt: number
   primitive?: CadPrimitive
+  featureModel?: CadFeatureModel
 }
 
 interface ImportStepRequest {
@@ -68,6 +71,8 @@ interface DisposeBodyRequest {
 
 interface CreatePrimitiveRequest { id: string; action: 'createPrimitive'; primitive: CadPrimitive }
 interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId: string; primitive: CadPrimitive }
+interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureModel }
+interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
 
 type WorkerRequest =
   | ImportStepRequest
@@ -75,6 +80,8 @@ type WorkerRequest =
   | RestoreProjectRequest
   | CreatePrimitiveRequest
   | UpdatePrimitiveRequest
+  | CreateFeatureModelRequest
+  | UpdateFeatureModelRequest
   | DisposeBodyRequest
 
 interface DisposedCadBody {
@@ -305,5 +312,17 @@ export async function createCadPrimitive(primitive: CadPrimitive): Promise<Impor
 export async function updateCadPrimitive(bodyId: string, primitive: CadPrimitive): Promise<ImportedCadBody> {
   const response = await sendRequest({ id: crypto.randomUUID(), action: 'updatePrimitive', bodyId, primitive })
   if (!isImportedCadBody(response)) throw new Error('The CAD worker returned invalid primitive data.')
+  return response
+}
+
+export async function createCadFeatureModel(featureModel: CadFeatureModel): Promise<ImportedCadBody> {
+  const response = await sendRequest({ id: crypto.randomUUID(), action: 'createFeatureModel', featureModel })
+  if (!isImportedCadBody(response)) throw new Error('The CAD worker returned invalid feature-model data.')
+  return response
+}
+
+export async function updateCadFeatureModel(bodyId: string, featureModel: CadFeatureModel): Promise<ImportedCadBody> {
+  const response = await sendRequest({ id: crypto.randomUUID(), action: 'updateFeatureModel', bodyId, featureModel })
+  if (!isImportedCadBody(response)) throw new Error('The CAD worker returned invalid feature-model data.')
   return response
 }
