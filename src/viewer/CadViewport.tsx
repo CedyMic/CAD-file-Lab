@@ -47,6 +47,8 @@ interface CadViewportProps {
   selectedPartIds?: ReadonlySet<string>
   partColors?: ReadonlyMap<string, string>
   partOpacities?: ReadonlyMap<string, number>
+  onSelectPart?: (partId: string, additive: boolean) => void
+  onClearSelection?: () => void
 }
 
 interface ViewMetrics {
@@ -200,6 +202,7 @@ function ImportedPart({
   color,
   selected,
   opacity,
+  onSelect,
 }: {
   part: CadRenderPart
   settings: DisplaySettings
@@ -207,6 +210,7 @@ function ImportedPart({
   color: string
   selected: boolean
   opacity: number
+  onSelect: (additive: boolean) => void
 }) {
   const faceGeometry =
     useMemo(() => {
@@ -310,7 +314,14 @@ function ImportedPart({
 
   return (
     <group position={modelPosition}>
-      <mesh geometry={faceGeometry}>
+      <mesh
+        geometry={faceGeometry}
+        onClick={(event) => {
+          event.stopPropagation()
+          const nativeEvent = event.nativeEvent
+          onSelect(nativeEvent.ctrlKey || nativeEvent.metaKey || nativeEvent.shiftKey)
+        }}
+      >
         <meshStandardMaterial
           color={color}
           emissive={selected ? '#b86b00' : '#000000'}
@@ -367,6 +378,7 @@ function ImportedModel({
   selectedPartIds,
   partColors,
   partOpacities,
+  onSelectPart,
 }: {
   model: ImportedCadBody
   settings: DisplaySettings
@@ -374,6 +386,7 @@ function ImportedModel({
   selectedPartIds: ReadonlySet<string>
   partColors: ReadonlyMap<string, string>
   partOpacities: ReadonlyMap<string, number>
+  onSelectPart: (partId: string, additive: boolean) => void
 }) {
   const modelPosition = useMemo(() => {
     const positions = convertZUpToYUp(model.faces.vertices)
@@ -400,6 +413,7 @@ function ImportedModel({
             color={partColors.get(part.id) ?? settings.modelColor}
             selected={selectedPartIds.has(part.id)}
             opacity={partOpacities.get(part.id) ?? 1}
+            onSelect={(additive) => onSelectPart(part.id, additive)}
           />
         )
       ))}
@@ -598,6 +612,8 @@ export function CadViewport({
   selectedPartIds = new Set<string>(),
   partColors = new Map<string, string>(),
   partOpacities = new Map<string, number>(),
+  onSelectPart = () => undefined,
+  onClearSelection = () => undefined,
 }: CadViewportProps) {
   const lightStrength =
     settings.brightness
@@ -643,6 +659,7 @@ export function CadViewport({
         gl.toneMappingExposure = 1.05
         gl.outputColorSpace = THREE.SRGBColorSpace
       }}
+      onPointerMissed={() => onClearSelection()}
     >
       <color
         attach="background"
@@ -732,6 +749,7 @@ export function CadViewport({
             selectedPartIds={selectedPartIds}
             partColors={partColors}
             partOpacities={partOpacities}
+            onSelectPart={onSelectPart}
           />
           <ContactShadows
             position={[0, -0.002, 0]}

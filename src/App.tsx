@@ -232,6 +232,21 @@ function App() {
   const selectedParts = model?.renderParts.filter((part) => selectedPartIds.has(part.id)) ?? []
   const selectedPart = selectedParts[0] ?? null
 
+  useEffect(() => {
+    function handleSelectAllShortcut(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'a' || !model) return
+
+      const target = event.target as HTMLElement | null
+      if (target?.matches('input, textarea, select, [contenteditable="true"]')) return
+
+      event.preventDefault()
+      setSelectedPartIds(new Set(model.renderParts.map((part) => part.id)))
+    }
+
+    window.addEventListener('keydown', handleSelectAllShortcut)
+    return () => window.removeEventListener('keydown', handleSelectAllShortcut)
+  }, [model])
+
   function installModel(nextModel: ImportedCadBody) {
     setModel(nextModel)
     setSelectedPartIds(new Set(nextModel.renderParts[0] ? [nextModel.renderParts[0].id] : []))
@@ -249,8 +264,10 @@ function App() {
     })
   }
 
-  function togglePartSelection(partId: string) {
+  function selectPart(partId: string, additive: boolean) {
     setSelectedPartIds((current) => {
+      if (!additive) return new Set([partId])
+
       const next = new Set(current)
       if (next.has(partId)) next.delete(partId)
       else next.add(partId)
@@ -1183,7 +1200,10 @@ function App() {
                     <button
                       className="body-select-button"
                       type="button"
-                      onClick={() => togglePartSelection(body.id)}
+                      onClick={(event) => selectPart(
+                        body.id,
+                        event.ctrlKey || event.metaKey || event.shiftKey,
+                      )}
                       aria-pressed={selectedPartIds.has(body.id)}
                     >
                       <span className="body-color-dot" style={{ background: partColors.get(body.id) ?? displaySettings.modelColor }} aria-hidden="true" />
@@ -1400,6 +1420,8 @@ function App() {
               selectedPartIds={selectedPartIds}
               partColors={partColors}
               partOpacities={partOpacities}
+              onSelectPart={selectPart}
+              onClearSelection={() => setSelectedPartIds(new Set())}
             />
 
             {error && (
