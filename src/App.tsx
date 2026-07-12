@@ -1366,7 +1366,7 @@ function App() {
             <button className="active" type="button" onClick={() => setActiveTool('view')}>
               <strong>View</strong><span>Navigate</span>
             </button>
-            <button type="button" disabled={!model} onClick={() => setActiveTool('measure')} title="Measure point-to-point distance">
+            <button type="button" disabled={!model} onClick={() => { setSelectedPartIds(new Set()); setActiveTool('measure') }} title="Open measurement tools">
               <strong>Measure</strong><span>Planned</span>
             </button>
             <button type="button" disabled title="Section view is in development">
@@ -1657,7 +1657,7 @@ function App() {
                 viewCommand
               }
               hiddenPartIds={hiddenPartIds}
-              selectedPartIds={selectedPartIds}
+              selectedPartIds={activeTool === 'measure' ? new Set<string>() : selectedPartIds}
               partColors={partColors}
               partOpacities={partOpacities}
               measurementEnabled={activeTool === 'measure'}

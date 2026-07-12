@@ -38,7 +38,6 @@ import {
   circularPolylineRadius,
   emptyDistanceMeasurement,
   faceAngleDegrees,
-  formatDistanceMillimetres,
   getDistanceMillimetres,
   parallelFaceDistance,
   type FaceSample,
@@ -524,17 +523,11 @@ function ImportedModel({
 function DistanceAnnotation({
   points,
   faces,
-  kind,
   lineVertices,
-  lineLength,
-  onReset,
 }: {
   points: readonly MeasurementPoint[]
   faces: readonly FaceSample[]
-  kind: 'points' | 'line'
   lineVertices: readonly MeasurementPoint[]
-  lineLength?: number
-  onReset: () => void
 }) {
   if (points.length === 0) return null
 
@@ -542,22 +535,6 @@ function DistanceAnnotation({
   const second = points.length === 2 ? new THREE.Vector3(...points[1]) : null
   const positions = second
     ? new Float32Array([...first.toArray(), ...second.toArray()])
-    : null
-  const distance = points.length === 2
-    ? getDistanceMillimetres({ points })
-    : null
-  const faceDistance = faces.length === 2
-    ? parallelFaceDistance(faces[0], faces[1])
-    : null
-  const faceAngle = faces.length === 2
-    ? faceAngleDegrees(faces[0], faces[1])
-    : null
-  const labelPosition = second
-    ? first.clone().add(second).multiplyScalar(0.5)
-    : first
-  const worldDeltas = second ? coordinateDeltas(points[0], points[1]) : null
-  const modelDeltas = worldDeltas
-    ? [worldDeltas[0], -worldDeltas[2], worldDeltas[1]] as const
     : null
 
   return (
@@ -573,16 +550,14 @@ function DistanceAnnotation({
           <meshBasicMaterial color="#ffad24" transparent opacity={0.42} depthTest={false} side={THREE.DoubleSide} />
         </mesh>
       ))}
-      <mesh position={first} renderOrder={20}>
-        <sphereGeometry args={[0.055, 16, 12]} />
-        <meshBasicMaterial color="#21a7ff" depthTest={false} />
-      </mesh>
+      <Html position={first} center zIndexRange={[40, 0]} style={{ pointerEvents: 'none' }}>
+        <div style={{ width: 18, height: 18, display: 'grid', placeItems: 'center', color: '#07131c', background: '#35b7ff', border: '2px solid white', borderRadius: '50%', boxShadow: '0 0 0 2px #0879b7, 0 2px 6px #0009', font: '700 10px system-ui' }}>1</div>
+      </Html>
       {second && positions && (
         <>
-          <mesh position={second} renderOrder={20}>
-            <sphereGeometry args={[0.055, 16, 12]} />
-            <meshBasicMaterial color="#21a7ff" depthTest={false} />
-          </mesh>
+          <Html position={second} center zIndexRange={[40, 0]} style={{ pointerEvents: 'none' }}>
+            <div style={{ width: 18, height: 18, display: 'grid', placeItems: 'center', color: '#07131c', background: '#35b7ff', border: '2px solid white', borderRadius: '50%', boxShadow: '0 0 0 2px #0879b7, 0 2px 6px #0009', font: '700 10px system-ui' }}>2</div>
+          </Html>
           <lineSegments renderOrder={20}>
             <bufferGeometry>
               <bufferAttribute attach="attributes-position" args={[positions, 3]} />
@@ -599,27 +574,6 @@ function DistanceAnnotation({
           <lineBasicMaterial color="#ffad24" depthTest={false} />
         </lineSegments>
       )}
-      <Html position={labelPosition} center zIndexRange={[40, 0]}>
-        <div style={{ background: '#102331ee', border: '1px solid #4380a3', borderRadius: 4, color: '#eef8ff', font: '600 12px system-ui', padding: '5px 7px', whiteSpace: 'nowrap', pointerEvents: 'auto' }}>
-          <span style={{ display: 'block', marginBottom: 3, color: '#86bddd', fontSize: 10, fontWeight: 600 }}>
-            Selected: {kind === 'line' ? 'Line' : faces.map((_, index) => `Face ${index + 1}`).join(' · ') || `Point ${points.length}`}
-          </span>
-          {distance === null ? 'Select second point' : `${kind === 'line' ? 'Line length' : 'Minimum'} ${formatDistanceMillimetres(kind === 'line' ? lineLength ?? distance : distance)}`}
-          {distance !== null && (
-            <span style={{ marginLeft: 7, color: faceDistance === null ? '#f0c68c' : '#9de0b4' }}>
-              {faceDistance === null
-                ? `Face angle ${faceAngle?.toFixed(1)}°`
-                : `Face gap ${formatDistanceMillimetres(faceDistance)}`}
-            </span>
-          )}
-          {modelDeltas && (
-            <span style={{ display: 'block', marginTop: 3, color: '#b9d2e2', fontWeight: 500 }}>
-              ΔX {formatDistanceMillimetres(Math.abs(modelDeltas[0]))} · ΔY {formatDistanceMillimetres(Math.abs(modelDeltas[1]))} · ΔZ {formatDistanceMillimetres(Math.abs(modelDeltas[2]))}
-            </span>
-          )}
-          <button type="button" onClick={onReset} aria-label="Clear measurement" style={{ background: 'transparent', border: 0, color: '#9dc8df', cursor: 'pointer', marginLeft: 7, padding: 0 }}>×</button>
-        </div>
-      </Html>
     </group>
   )
 }
@@ -667,7 +621,11 @@ function MeasurableImportedModel({
     const points = measurement.distance.points
     if (points.length !== 2) {
       onMeasurementChange?.({
-        selections: measurement.kind === 'line' ? ['Line'] : measurement.faces.map((_, index) => `Face ${index + 1}`),
+        selections: measurement.kind === 'line'
+          ? ['Line']
+          : measurement.faces.length
+            ? measurement.faces.map((_, index) => `Face ${index + 1}`)
+            : points.map((_, index) => `Point ${index + 1}`),
       })
       return
     }
@@ -676,7 +634,11 @@ function MeasurableImportedModel({
       ? parallelFaceDistance(measurement.faces[0], measurement.faces[1])
       : null
     onMeasurementChange?.({
-      selections: measurement.kind === 'line' ? ['Line'] : measurement.faces.map((_, index) => `Face ${index + 1}`),
+      selections: measurement.kind === 'line'
+        ? ['Line']
+        : measurement.faces.length
+          ? measurement.faces.map((_, index) => `Face ${index + 1}`)
+          : points.map((_, index) => `Point ${index + 1}`),
       distance: getDistanceMillimetres(measurement.distance) ?? undefined,
       deltaX: world[0],
       deltaY: -world[2],
@@ -729,10 +691,7 @@ function MeasurableImportedModel({
       <DistanceAnnotation
         points={measurement.distance.points}
         faces={measurement.faces}
-        kind={measurement.kind}
         lineVertices={measurement.lineVertices}
-        lineLength={measurement.lineLength}
-        onReset={() => setMeasurement({ distance: emptyDistanceMeasurement, faces: [], kind: 'points', lineVertices: [], lineLength: undefined, radius: undefined, lineEntityId: undefined })}
       />
     </>
   )
