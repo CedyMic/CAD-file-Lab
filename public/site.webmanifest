@@ -1,0 +1,16 @@
+{
+  "name": "CAD File Lab",
+  "short_name": "CAD File Lab",
+  "description": "Private browser-based workspace for opening and inspecting 3D files.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f151c",
+  "theme_color": "#0f151c",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

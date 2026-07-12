@@ -1,8 +1,9 @@
 # CAD File Lab
 
 CAD File Lab is a privacy-first, browser-local workspace for opening and
-inspecting STEP/STP files. CAD parsing and meshing run in a web worker; model
-files are not uploaded by the application.
+inspecting 3D files. STEP/STP is the first verified importer; more CAD and mesh
+formats are planned. Parsing and meshing run in a web worker, and model files
+are not uploaded by the application.
 
 ## Current status
 

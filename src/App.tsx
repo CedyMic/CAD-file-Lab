@@ -353,9 +353,9 @@ function App() {
 
     try {
       await navigator.clipboard.writeText(feedback)
-      setFeedbackStatus('Feedback copied. You can paste it into an email when the support address is available.')
+      setFeedbackStatus('Report copied successfully. Paste it into an email to admin@cadfilelab.com.')
     } catch {
-      setFeedbackStatus('Copy failed. Please select and copy your message manually.')
+      setFeedbackStatus('Report was not copied. Select your message manually and email it to admin@cadfilelab.com.')
     }
   }
 
@@ -946,6 +946,9 @@ function App() {
 
   return (
     <main className="app-shell">
+      <a className="skip-link" href="#workspace">
+        Skip to CAD workspace
+      </a>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">
@@ -992,7 +995,7 @@ function App() {
           >
             {isLoading
               ? 'Working…'
-              : 'Open STEP file'}
+              : 'Open 3D file'}
           </button>
 
           <input
@@ -1027,7 +1030,7 @@ function App() {
         </div>
       </header>
 
-      <section className="workspace">
+      <section className="workspace" id="workspace">
         <aside className="sidebar">
           <div className="sidebar-heading">
             <p>
@@ -1035,8 +1038,8 @@ function App() {
             </p>
 
             <h1>
-              Open and inspect 3D CAD
-              files locally
+              Open and inspect 3D files
+              locally
             </h1>
           </div>
 
@@ -1106,15 +1109,6 @@ function App() {
                 : 'Stored locally in this browser'}
             </span>
 
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={isLoading}
-              onClick={openProjectFilePicker}
-            >
-              Open project file
-            </button>
-
             {model && (
               <button
                 type="button"
@@ -1128,21 +1122,14 @@ function App() {
               </button>
             )}
 
-            {model && (
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={
-                  isSavingRecovery ||
-                  !localRecoveryEnabled
-                }
-                onClick={() => {
-                  void saveCurrentRecovery()
-                }}
-              >
-                Save recovery now
-              </button>
-            )}
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isLoading}
+              onClick={openProjectFilePicker}
+            >
+              Open project file
+            </button>
 
             {model && !localRecoveryEnabled && (
               <button
@@ -1344,6 +1331,25 @@ function App() {
         </section>
       </section>
 
+      <footer className="site-footer">
+        <div className="site-footer-identity">
+          <strong>CAD File Lab</strong>
+          <span>Operated by Cedric Takem · Fellbach, Germany</span>
+        </div>
+
+        <nav aria-label="Legal and service information">
+          <a href="/IMPRINT.txt" target="_blank" rel="noreferrer">Impressum</a>
+          <a href="/PRIVACY_NOTICE.txt" target="_blank" rel="noreferrer">Privacy</a>
+          <a href="/TERMS_OF_USE.txt" target="_blank" rel="noreferrer">Terms</a>
+          <a href="/THIRD_PARTY_NOTICES.txt" target="_blank" rel="noreferrer">Open-source notices</a>
+          <a href="mailto:admin@cadfilelab.com">Contact</a>
+        </nav>
+
+        <span className="site-footer-privacy">
+          CAD files are processed locally in your browser.
+        </span>
+      </footer>
+
       {informationPanel && (
         <div
           className="information-backdrop"
@@ -1445,7 +1451,12 @@ function App() {
                   void copyFeedback()
                 }}
               >
-                <p>Feedback is not transmitted or stored. Copy a prepared report now; an email destination will be added before public launch.</p>
+                <p>
+                  Feedback is not automatically transmitted or stored. Copy the prepared
+                  report, then email it to{' '}
+                  <a href="mailto:admin@cadfilelab.com">admin@cadfilelab.com</a>.
+                  Never attach confidential CAD files.
+                </p>
                 <label>
                   Category
                   <select
@@ -1475,7 +1486,11 @@ function App() {
                 <button className="primary-button" type="submit" disabled={!feedbackMessage.trim()}>
                   Copy feedback report
                 </button>
-                {feedbackStatus && <p className="feedback-status" role="status">{feedbackStatus}</p>}
+                {feedbackStatus && (
+                  <p className="feedback-status" role="status" aria-live="polite">
+                    {feedbackStatus}
+                  </p>
+                )}
               </form>
             )}
           </section>

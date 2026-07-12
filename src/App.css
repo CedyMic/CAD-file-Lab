@@ -43,8 +43,26 @@ textarea:focus-visible {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 64px minmax(0, 1fr) auto;
   overflow: hidden;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 200;
+  top: 8px;
+  left: 8px;
+  padding: 10px 14px;
+  color: #ffffff;
+  background: #104f9f;
+  border-radius: 8px;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 .topbar {
@@ -172,7 +190,7 @@ textarea:focus-visible {
 }
 
 .workspace {
-  height: calc(100vh - 64px);
+  min-height: 0;
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
 }
@@ -552,6 +570,53 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.site-footer {
+  min-height: 46px;
+  padding: 8px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  color: #aebdca;
+  background: #0a1016;
+  border-top: 1px solid #293642;
+  font-size: 11px;
+}
+
+.site-footer-identity {
+  display: grid;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.site-footer-identity strong {
+  color: #f1f6fa;
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 16px;
+}
+
+.site-footer a {
+  color: #c9e2ff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-footer a:hover,
+.site-footer a:focus-visible {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.site-footer-privacy {
+  text-align: right;
+}
+
 .information-backdrop {
   position: fixed;
   z-index: 100;
@@ -728,6 +793,10 @@ textarea:focus-visible {
   .tool-button {
     padding: 11px;
   }
+
+  .site-footer-privacy {
+    display: none;
+  }
 }
 
 @media (max-width: 680px) {
@@ -760,7 +829,7 @@ textarea:focus-visible {
   }
 
   .viewer-panel {
-    height: calc(100vh - 64px);
+    height: 100%;
   }
 
   .viewer-toolbar span {
@@ -793,5 +862,18 @@ textarea:focus-visible {
 
   .help-content {
     grid-template-columns: 1fr;
+  }
+
+  .site-footer {
+    padding: 8px 12px;
+  }
+
+  .site-footer-identity span {
+    display: none;
+  }
+
+  .site-footer nav {
+    justify-content: flex-end;
+    gap: 5px 10px;
   }
 }
