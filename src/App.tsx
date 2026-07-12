@@ -1001,7 +1001,7 @@ function App() {
             ref={fileInputRef}
             hidden
             type="file"
-            accept=".step,.stp,.stl,.cadlab"
+            accept=".step,.stp,.stl,.obj,.ply,.cadlab"
             onChange={(event) => {
               const file =
                 event.target.files?.[0]
@@ -1362,12 +1362,12 @@ function App() {
                     <span>STEP <small>.step</small></span>
                     <span>STP <small>.stp</small></span>
                     <span>STL <small>.stl</small></span>
+                    <span>OBJ <small>.obj</small></span>
+                    <span>PLY <small>.ply</small></span>
                   </div>
                   <small>Files up to 256 MiB · STL is view-only · More formats are in development</small>
                   <strong className="planned-formats-label">Planned import support</strong>
                   <div className="format-badges planned-format-badges" aria-label="Planned 3D file formats">
-                    <span>OBJ <small>.obj</small></span>
-                    <span>PLY <small>.ply</small></span>
                     <span>GLB <small>.glb</small></span>
                     <span>glTF <small>.gltf</small></span>
                     <span>3MF <small>.3mf</small></span>

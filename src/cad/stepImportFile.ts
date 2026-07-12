@@ -27,10 +27,12 @@ export function validateStepImportFile(
   if (
     extension !== 'step' &&
     extension !== 'stp' &&
-    extension !== 'stl'
+    extension !== 'stl' &&
+    extension !== 'obj' &&
+    extension !== 'ply'
   ) {
     throw new Error(
-      'This version currently supports STEP, STP and STL files.',
+      'This version currently supports STEP, STP, STL, OBJ and PLY files.',
     )
   }
 

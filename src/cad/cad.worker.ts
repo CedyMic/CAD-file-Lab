@@ -10,7 +10,13 @@ import {
   setOC,
 } from 'replicad'
 
-import { EdgesGeometry } from 'three'
+import {
+  EdgesGeometry,
+  Mesh,
+  type BufferGeometry,
+} from 'three'
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 
 import {
@@ -306,50 +312,108 @@ function createRenderData(
   }
 }
 
-async function importStlFile(
-  file: File,
-): Promise<ImportedBodyData> {
-  const geometry = new STLLoader().parse(await file.arrayBuffer())
-
-  if (!geometry.getAttribute('normal')) {
-    geometry.computeVertexNormals()
-  }
-
-  const position = geometry.getAttribute('position')
-  const normal = geometry.getAttribute('normal')
-  const index = geometry.getIndex()
-  const edgeGeometry = new EdgesGeometry(geometry, 15)
-  const edgePosition = edgeGeometry.getAttribute('position')
+function createMeshRenderData(
+  fileName: string,
+  parts: Array<{ name: string; geometry: BufferGeometry }>,
+): ImportedBodyData {
   const bodyId = crypto.randomUUID()
+  const vertices: number[] = []
+  const normals: number[] = []
+  const triangles: number[] = []
+  const lines: number[] = []
 
-  if (position.count === 0) {
-    geometry.dispose()
+  for (const part of parts) {
+    const { geometry } = part
+
+    if (!geometry.getAttribute('normal')) {
+      geometry.computeVertexNormals()
+    }
+
+    const position = geometry.getAttribute('position')
+    const normal = geometry.getAttribute('normal')
+    const index = geometry.getIndex()
+    const vertexOffset = vertices.length / 3
+    const edgeGeometry = new EdgesGeometry(geometry, 15)
+
+    vertices.push(...Array.from(position.array))
+    normals.push(...Array.from(normal.array))
+    lines.push(...Array.from(edgeGeometry.getAttribute('position').array))
+
+    if (index) {
+      triangles.push(...Array.from(index.array, (value) => Number(value) + vertexOffset))
+    } else {
+      triangles.push(...Array.from(
+        { length: position.count },
+        (_, triangleIndex) => triangleIndex + vertexOffset,
+      ))
+    }
+
     edgeGeometry.dispose()
-    throw new Error('The selected STL file contains no triangles.')
   }
 
-  const renderData: ImportedBodyData = {
+  if (vertices.length === 0) {
+    throw new Error('The selected mesh file contains no triangles.')
+  }
+
+  return {
     bodyId,
-    fileName: file.name,
+    fileName,
     editable: false,
-    bodySummaries: [{ id: `${bodyId}-body-1`, name: 'Mesh 1' }],
+    bodySummaries: parts.map((part, index) => ({
+      id: `${bodyId}-mesh-${index + 1}`,
+      name: part.name || `Mesh ${index + 1}`,
+    })),
     faces: {
-      vertices: Array.from(position.array),
-      normals: Array.from(normal.array),
-      triangles: index
-        ? Array.from(index.array)
-        : Array.from({ length: position.count }, (_, triangleIndex) => triangleIndex),
+      vertices,
+      normals,
+      triangles,
       faceGroups: [],
     },
     edges: {
-      lines: Array.from(edgePosition.array),
+      lines,
       edgeGroups: [],
     },
   }
+}
 
-  geometry.dispose()
-  edgeGeometry.dispose()
-  return renderData
+async function importMeshFile(
+  file: File,
+  extension: string,
+): Promise<ImportedBodyData> {
+  const parts: Array<{ name: string; geometry: BufferGeometry }> = []
+
+  if (extension === 'stl') {
+    parts.push({
+      name: 'Mesh 1',
+      geometry: new STLLoader().parse(await file.arrayBuffer()),
+    })
+  } else if (extension === 'ply') {
+    parts.push({
+      name: 'Mesh 1',
+      geometry: new PLYLoader().parse(await file.arrayBuffer()),
+    })
+  } else {
+    const object = new OBJLoader().parse(await file.text())
+    object.updateMatrixWorld(true)
+    object.traverse((child) => {
+      if (child instanceof Mesh && child.geometry) {
+        const geometry = child.geometry.clone()
+        geometry.applyMatrix4(child.matrixWorld)
+        parts.push({
+          name: child.name || `Mesh ${parts.length + 1}`,
+          geometry,
+        })
+      }
+    })
+  }
+
+  try {
+    return createMeshRenderData(file.name, parts)
+  } finally {
+    for (const part of parts) {
+      part.geometry.dispose()
+    }
+  }
 }
 
 async function importStepFile(
@@ -357,8 +421,10 @@ async function importStepFile(
 ): Promise<ImportedBodyData> {
   validateStepImportFile(file)
 
-  if (file.name.toLowerCase().endsWith('.stl')) {
-    return importStlFile(file)
+  const extension = file.name.toLowerCase().split('.').pop() ?? ''
+
+  if (extension === 'stl' || extension === 'obj' || extension === 'ply') {
+    return importMeshFile(file, extension)
   }
 
   await initializeCadKernel()
