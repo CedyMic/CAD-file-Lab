@@ -64,6 +64,18 @@ interface CadViewportProps {
   onSelectPart?: (partId: string, additive: boolean) => void
   onClearSelection?: () => void
   measurementEnabled?: boolean
+  onMeasurementChange?: (summary: MeasurementSummary) => void
+}
+
+export interface MeasurementSummary {
+  selections: string[]
+  distance?: number
+  deltaX?: number
+  deltaY?: number
+  deltaZ?: number
+  faceGap?: number
+  faceAngle?: number
+  lineLength?: number
 }
 
 interface ViewMetrics {
@@ -570,6 +582,7 @@ function MeasurableImportedModel({
   partColors,
   partOpacities,
   onSelectPart,
+  onMeasurementChange,
 }: {
   model: ImportedCadBody
   settings: DisplaySettings
@@ -578,6 +591,7 @@ function MeasurableImportedModel({
   partColors: ReadonlyMap<string, string>
   partOpacities: ReadonlyMap<string, number>
   onSelectPart: (partId: string, additive: boolean) => void
+  onMeasurementChange?: (summary: MeasurementSummary) => void
 }) {
   const [measurement, setMeasurement] = useState({
     distance: emptyDistanceMeasurement,
@@ -592,6 +606,32 @@ function MeasurableImportedModel({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
+
+  useEffect(() => {
+    const points = measurement.distance.points
+    if (points.length !== 2) {
+      onMeasurementChange?.({
+        selections: measurement.kind === 'line' ? ['Line'] : measurement.faces.map((_, index) => `Face ${index + 1}`),
+      })
+      return
+    }
+    const world = coordinateDeltas(points[0], points[1])
+    const faceGap = measurement.faces.length === 2
+      ? parallelFaceDistance(measurement.faces[0], measurement.faces[1])
+      : null
+    onMeasurementChange?.({
+      selections: measurement.kind === 'line' ? ['Line'] : measurement.faces.map((_, index) => `Face ${index + 1}`),
+      distance: getDistanceMillimetres(measurement.distance) ?? undefined,
+      deltaX: world[0],
+      deltaY: -world[2],
+      deltaZ: world[1],
+      faceGap: faceGap ?? undefined,
+      faceAngle: measurement.faces.length === 2 && faceGap === null
+        ? faceAngleDegrees(measurement.faces[0], measurement.faces[1])
+        : undefined,
+      lineLength: measurement.kind === 'line' ? getDistanceMillimetres(measurement.distance) ?? undefined : undefined,
+    })
+  }, [measurement, onMeasurementChange])
 
   return (
     <>
@@ -828,6 +868,7 @@ export function CadViewport({
   onSelectPart = () => undefined,
   onClearSelection = () => undefined,
   measurementEnabled = false,
+  onMeasurementChange,
 }: CadViewportProps) {
   const [measurementResetId, setMeasurementResetId] = useState(0)
   const lightStrength =
@@ -970,6 +1011,7 @@ export function CadViewport({
               partColors={partColors}
               partOpacities={partOpacities}
               onSelectPart={onSelectPart}
+              onMeasurementChange={onMeasurementChange}
             />
           ) : (
             <ImportedModel

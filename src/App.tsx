@@ -47,6 +47,7 @@ import {
 
 import {
   CadViewport,
+  type MeasurementSummary,
   type ViewCommand,
   type ViewCommandType,
 } from './viewer/CadViewport'
@@ -147,6 +148,10 @@ function formatRecoveryTime(
   ).toLocaleString()
 }
 
+function formatSignedMillimetres(value: number): string {
+  return `${value.toLocaleString('en-US', { maximumFractionDigits: 3 })} mm`
+}
+
 function App() {
   const fileInputRef =
     useRef<HTMLInputElement>(null)
@@ -208,6 +213,7 @@ function App() {
   })
   const [primitiveBodyId, setPrimitiveBodyId] = useState<string | null>(null)
   const [isCreatingPrimitive, setIsCreatingPrimitive] = useState(false)
+  const [measurementSummary, setMeasurementSummary] = useState<MeasurementSummary>({ selections: [] })
 
   const [selectedPartIds, setSelectedPartIds] = useState<Set<string>>(() => new Set())
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(() => new Set())
@@ -1572,6 +1578,7 @@ function App() {
               partColors={partColors}
               partOpacities={partOpacities}
               measurementEnabled={activeTool === 'measure'}
+              onMeasurementChange={setMeasurementSummary}
               onSelectPart={selectPart}
               onClearSelection={() => setSelectedPartIds(new Set())}
             />
@@ -1780,6 +1787,18 @@ function App() {
             <>
               {activeTool === 'measure' && measuredProperties && (
                 <section className="measurement-properties">
+                  <span className="panel-label">Measure</span>
+                  <div className="measurement-selection-list">
+                    <span>Selected</span>
+                    <strong>{measurementSummary.selections.length
+                      ? measurementSummary.selections.join(' · ')
+                      : 'Select a face, line, or two points'}</strong>
+                  </div>
+                  {measurementSummary.distance !== undefined && <div><span>Minimum distance</span><strong>{formatSignedMillimetres(measurementSummary.distance)}</strong></div>}
+                  {measurementSummary.lineLength !== undefined && <div><span>Line length</span><strong>{formatSignedMillimetres(measurementSummary.lineLength)}</strong></div>}
+                  {measurementSummary.deltaX !== undefined && <div><span>ΔX / ΔY / ΔZ</span><strong>{formatSignedMillimetres(measurementSummary.deltaX)} / {formatSignedMillimetres(measurementSummary.deltaY ?? 0)} / {formatSignedMillimetres(measurementSummary.deltaZ ?? 0)}</strong></div>}
+                  {measurementSummary.faceGap !== undefined && <div><span>Normal face gap</span><strong>{formatSignedMillimetres(measurementSummary.faceGap)}</strong></div>}
+                  {measurementSummary.faceAngle !== undefined && <div><span>Face angle</span><strong>{measurementSummary.faceAngle.toFixed(2)}°</strong></div>}
                   <span className="panel-label">Mesh properties</span>
                   <div><span>Scope</span><strong>{selectedPart?.name ?? 'Whole model'}</strong></div>
                   <div><span>Surface area</span><strong>{formatAreaMm2(measuredProperties.surfaceAreaMm2)}</strong></div>
