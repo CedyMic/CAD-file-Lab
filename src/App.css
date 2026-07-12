@@ -136,9 +136,13 @@ textarea:focus-visible {
 }
 
 .toolbar-icon {
+  width: 21px;
+  height: 21px;
   display: block;
-  font-size: 21px;
-  line-height: 1;
+  stroke: currentcolor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .viewer-toolbar .toolbar-icon {

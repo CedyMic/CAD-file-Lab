@@ -1229,7 +1229,9 @@ function App() {
                   )
                 }}
               >
-                <span className="toolbar-icon" aria-hidden="true">⛶</span>
+                <svg className="toolbar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
+                  <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
+                </svg>
               </button>
 
               <button
@@ -1238,7 +1240,9 @@ function App() {
                 aria-label="Undo"
                 title="Undo"
               >
-                <span className="toolbar-icon" aria-hidden="true">↶</span>
+                <svg className="toolbar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
+                  <path d="M9 7 4 12l5 5M5 12h8a6 6 0 0 1 6 6" />
+                </svg>
               </button>
 
               <button
@@ -1247,7 +1251,9 @@ function App() {
                 aria-label="Redo"
                 title="Redo"
               >
-                <span className="toolbar-icon" aria-hidden="true">↷</span>
+                <svg className="toolbar-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
+                  <path d="m15 7 5 5-5 5M19 12h-8a6 6 0 0 0-6 6" />
+                </svg>
               </button>
             </div>
           </div>
