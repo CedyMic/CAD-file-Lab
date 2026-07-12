@@ -34,6 +34,6 @@ export const defaultDisplaySettings: DisplaySettings = {
   showAxes: true,
   showViewCube: true,
   brightness: 0.9,
-  edgeOpacity: 0.72,
+  edgeOpacity: 0.58,
   modelOpacity: 1,
 }

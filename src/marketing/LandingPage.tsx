@@ -1,7 +1,7 @@
 import './LandingPage.css'
 
-const availableFormats = ['STEP', 'STP', 'STL', 'OBJ', 'PLY']
-const plannedFormats = ['GLB', 'glTF', '3MF', 'IGES', 'BREP']
+const availableFormats = ['STEP', 'STP', 'STL', 'OBJ', 'PLY', 'GLB', 'glTF', '3MF']
+const plannedFormats = ['IGES', 'BREP']
 
 export function LandingPage() {
   return (
@@ -77,7 +77,7 @@ export function LandingPage() {
             <p>Exact CAD geometry and triangle meshes have different capabilities. CAD File Lab labels those differences instead of hiding them.</p>
           </div>
           <div className="format-columns">
-            <article><h3>Available now</h3><div>{availableFormats.map((format) => <span key={format}>{format}</span>)}</div><p>STEP and STP are editable. STL, OBJ and PLY are currently view-only.</p></article>
+            <article><h3>Available now</h3><div>{availableFormats.map((format) => <span key={format}>{format}</span>)}</div><p>STEP and STP are editable. Mesh and scene formats are currently view-only; glTF must embed its dependencies.</p></article>
             <article><h3>Planned import support</h3><div>{plannedFormats.map((format) => <span key={format}>{format}</span>)}</div><p>Each format will be released only after its local importer is verified.</p></article>
           </div>
         </section>

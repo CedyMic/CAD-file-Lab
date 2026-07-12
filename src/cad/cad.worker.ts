@@ -4,6 +4,8 @@ import opencascadeFactory from
 import opencascadeWasm from
   'replicad-opencascadejs/src/replicad_single.wasm?url'
 
+import { DOMParser as XmlDomParser } from '@xmldom/xmldom'
+
 import {
   deserializeShape,
   importSTEP,
@@ -15,7 +17,10 @@ import {
   EdgesGeometry,
   Mesh,
   type BufferGeometry,
+  type Object3D,
 } from 'three'
+import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js'
+import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
@@ -30,6 +35,8 @@ import {
 
 type CadShape =
   Awaited<ReturnType<typeof importSTEP>>
+
+;(globalThis as unknown as { DOMParser: typeof XmlDomParser }).DOMParser = XmlDomParser
 
 interface OpenCascadeFactoryOptions {
   locateFile?: (fileName: string) => string
@@ -424,18 +431,7 @@ async function importMeshFile(
 ): Promise<ImportedBodyData> {
   const parts: Array<{ name: string; geometry: BufferGeometry }> = []
 
-  if (extension === 'stl') {
-    parts.push({
-      name: 'Mesh 1',
-      geometry: new STLLoader().parse(await file.arrayBuffer()),
-    })
-  } else if (extension === 'ply') {
-    parts.push({
-      name: 'Mesh 1',
-      geometry: new PLYLoader().parse(await file.arrayBuffer()),
-    })
-  } else {
-    const object = new OBJLoader().parse(await file.text())
+  function collectObjectParts(object: Object3D) {
     object.updateMatrixWorld(true)
     object.traverse((child) => {
       if (child instanceof Mesh && child.geometry) {
@@ -447,6 +443,44 @@ async function importMeshFile(
         })
       }
     })
+  }
+
+  if (extension === 'stl') {
+    parts.push({
+      name: 'Mesh 1',
+      geometry: new STLLoader().parse(await file.arrayBuffer()),
+    })
+  } else if (extension === 'ply') {
+    parts.push({
+      name: 'Mesh 1',
+      geometry: new PLYLoader().parse(await file.arrayBuffer()),
+    })
+  } else if (extension === 'obj') {
+    const object = new OBJLoader().parse(await file.text())
+    collectObjectParts(object)
+  } else if (extension === '3mf') {
+    const object = new ThreeMFLoader().parse(await file.arrayBuffer())
+    collectObjectParts(object)
+  } else {
+    const data = extension === 'gltf' ? await file.text() : await file.arrayBuffer()
+
+    if (extension === 'gltf') {
+      const json = JSON.parse(data as string) as {
+        buffers?: Array<{ uri?: string }>
+        images?: Array<{ uri?: string }>
+      }
+      const externalUri = [...(json.buffers ?? []), ...(json.images ?? [])]
+        .map((entry) => entry.uri)
+        .find((uri) => uri && !uri.startsWith('data:'))
+      if (externalUri) {
+        throw new Error('This glTF references external files. Use GLB or an embedded glTF so every dependency stays in one local file.')
+      }
+    }
+
+    const gltf = await new Promise<GLTF>((resolve, reject) => {
+      new GLTFLoader().parse(data, '', resolve, reject)
+    })
+    collectObjectParts(gltf.scene)
   }
 
   try {
@@ -465,7 +499,7 @@ async function importStepFile(
 
   const extension = file.name.toLowerCase().split('.').pop() ?? ''
 
-  if (extension === 'stl' || extension === 'obj' || extension === 'ply') {
+  if (['stl', 'obj', 'ply', 'glb', 'gltf', '3mf'].includes(extension)) {
     return importMeshFile(file, extension)
   }
 

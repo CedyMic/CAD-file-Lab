@@ -29,10 +29,13 @@ export function validateStepImportFile(
     extension !== 'stp' &&
     extension !== 'stl' &&
     extension !== 'obj' &&
-    extension !== 'ply'
+    extension !== 'ply' &&
+    extension !== 'glb' &&
+    extension !== 'gltf' &&
+    extension !== '3mf'
   ) {
     throw new Error(
-      'This version currently supports STEP, STP, STL, OBJ and PLY files.',
+      'This version currently supports STEP, STP, STL, OBJ, PLY, GLB, glTF and 3MF files.',
     )
   }
 

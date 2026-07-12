@@ -1,4 +1,5 @@
 import {
+  ContactShadows,
   Edges,
   GizmoHelper,
   GizmoViewport,
@@ -678,6 +679,12 @@ export function CadViewport({
         position={[-5, 3, -6]}
       />
 
+      <directionalLight
+        intensity={0.7 * lightStrength}
+        color="#8fc9ff"
+        position={[-8, 7, 10]}
+      />
+
       {settings.showGrid && (
         <Grid
           position={[
@@ -717,14 +724,25 @@ export function CadViewport({
       )}
 
       {model ? (
-        <ImportedModel
-          model={model}
-          settings={settings}
-          hiddenPartIds={hiddenPartIds}
-          selectedPartIds={selectedPartIds}
-          partColors={partColors}
-          partOpacities={partOpacities}
-        />
+        <>
+          <ImportedModel
+            model={model}
+            settings={settings}
+            hiddenPartIds={hiddenPartIds}
+            selectedPartIds={selectedPartIds}
+            partColors={partColors}
+            partOpacities={partOpacities}
+          />
+          <ContactShadows
+            position={[0, -0.002, 0]}
+            opacity={0.32}
+            scale={Math.max(viewMetrics.radius * 4, 4)}
+            blur={2.4}
+            far={Math.max(viewMetrics.radius * 3, 3)}
+            resolution={512}
+            color="#05090d"
+          />
+        </>
       ) : (
         <TestModel
           settings={settings}

@@ -6,13 +6,16 @@ import {
   validateStepImportFile,
 } from '../src/cad/stepImportFile.ts'
 
-test('accepts STEP, STP, STL, OBJ and PLY metadata at the size limit', () => {
+test('accepts current CAD, mesh and scene formats at the size limit', () => {
   for (const name of [
     'assembly.step',
     'ASSEMBLY.STP',
     'mesh.stl',
     'scene.obj',
     'scan.ply',
+    'scene.glb',
+    'embedded.gltf',
+    'print.3mf',
   ]) {
     assert.doesNotThrow(() => {
       validateStepImportFile({
@@ -26,10 +29,10 @@ test('accepts STEP, STP, STL, OBJ and PLY metadata at the size limit', () => {
 test('rejects unsupported or empty CAD files', () => {
   assert.throws(
     () => validateStepImportFile({
-      name: 'scene.glb',
+      name: 'surface.iges',
       size: 1,
     }),
-    /supports STEP, STP, STL, OBJ and PLY/,
+    /supports STEP, STP, STL, OBJ, PLY, GLB, glTF and 3MF/,
   )
 
   assert.throws(
