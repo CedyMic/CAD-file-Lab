@@ -961,7 +961,7 @@ function App() {
             </strong>
 
             <span>
-              Local-first CAD workspace
+              Private, local 3D workspace
             </span>
           </div>
         </div>
@@ -1274,17 +1274,17 @@ function App() {
 
             {!model && !isLoading && (
               <section className="empty-workspace" aria-labelledby="empty-workspace-title">
-                <span className="empty-workspace-kicker">Start a workspace</span>
-                <h2 id="empty-workspace-title">Open your first 3D file</h2>
+                <span className="empty-workspace-kicker">Your private 3D workspace</span>
+                <h2 id="empty-workspace-title">View, modify and create—locally</h2>
                 <p>
-                  Inspect a model directly in your browser. Nothing is uploaded,
-                  and you do not need CAD experience to get started.
+                  Work with 3D models directly in your browser. Your files stay on
+                  your device—no uploads and no server-side model processing.
                 </p>
                 <button className="primary-button" type="button" onClick={openFilePicker}>
                   Choose a 3D file
                 </button>
                 <span className="format-note">
-                  Available now: STEP and STP · Up to 256 MiB
+                  Viewing available now: STEP and STP · Modify and create are in development
                 </span>
                 <ol className="getting-started-steps">
                   <li><strong>Open</strong><span>Choose or drop a supported file</span></li>
