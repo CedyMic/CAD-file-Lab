@@ -97,8 +97,8 @@ const tools: Array<{
     id: 'measure',
     label: 'Measure',
     description:
-      'Vertices, edges, faces and angles',
-    available: false,
+      'Click two model points to measure distance',
+    available: true,
   },
   {
     id: 'modify',
@@ -1215,7 +1215,7 @@ function App() {
             <button className="active" type="button" onClick={() => setActiveTool('view')}>
               <strong>View</strong><span>Navigate</span>
             </button>
-            <button type="button" disabled title="Measurement tools are in development">
+            <button type="button" disabled={!model} onClick={() => setActiveTool('measure')} title="Measure point-to-point distance">
               <strong>Measure</strong><span>Planned</span>
             </button>
             <button type="button" disabled title="Section view is in development">
@@ -1509,6 +1509,7 @@ function App() {
               selectedPartIds={selectedPartIds}
               partColors={partColors}
               partOpacities={partOpacities}
+              measurementEnabled={activeTool === 'measure'}
               onSelectPart={selectPart}
               onClearSelection={() => setSelectedPartIds(new Set())}
             />

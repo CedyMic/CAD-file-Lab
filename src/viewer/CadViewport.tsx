@@ -4,6 +4,7 @@ import {
   GizmoHelper,
   GizmoViewport,
   Grid,
+  Html,
   OrbitControls,
 } from '@react-three/drei'
 import {
@@ -14,6 +15,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from 'react'
 import type {
   OrbitControls as OrbitControlsInstance,
@@ -29,6 +31,14 @@ import {
   defaultDisplaySettings,
   type DisplaySettings,
 } from './displaySettings'
+
+import {
+  addDistancePoint,
+  emptyDistanceMeasurement,
+  formatDistanceMillimetres,
+  getDistanceMillimetres,
+  type MeasurementPoint,
+} from './measurement'
 
 export type ViewCommandType =
   | 'fit'
@@ -49,6 +59,7 @@ interface CadViewportProps {
   partOpacities?: ReadonlyMap<string, number>
   onSelectPart?: (partId: string, additive: boolean) => void
   onClearSelection?: () => void
+  measurementEnabled?: boolean
 }
 
 interface ViewMetrics {
@@ -203,6 +214,7 @@ function ImportedPart({
   selected,
   opacity,
   onSelect,
+  onMeasurePoint,
 }: {
   part: CadRenderPart
   settings: DisplaySettings
@@ -211,6 +223,7 @@ function ImportedPart({
   selected: boolean
   opacity: number
   onSelect: (additive: boolean) => void
+  onMeasurePoint?: (point: MeasurementPoint) => void
 }) {
   const faceGeometry =
     useMemo(() => {
@@ -318,6 +331,10 @@ function ImportedPart({
         geometry={faceGeometry}
         onClick={(event) => {
           event.stopPropagation()
+          if (onMeasurePoint) {
+            onMeasurePoint([event.point.x, event.point.y, event.point.z])
+            return
+          }
           const nativeEvent = event.nativeEvent
           onSelect(nativeEvent.ctrlKey || nativeEvent.metaKey || nativeEvent.shiftKey)
         }}
@@ -379,6 +396,7 @@ function ImportedModel({
   partColors,
   partOpacities,
   onSelectPart,
+  onMeasurePoint,
 }: {
   model: ImportedCadBody
   settings: DisplaySettings
@@ -387,6 +405,7 @@ function ImportedModel({
   partColors: ReadonlyMap<string, string>
   partOpacities: ReadonlyMap<string, number>
   onSelectPart: (partId: string, additive: boolean) => void
+  onMeasurePoint?: (point: MeasurementPoint) => void
 }) {
   const modelPosition = useMemo(() => {
     const positions = convertZUpToYUp(model.faces.vertices)
@@ -414,10 +433,111 @@ function ImportedModel({
             selected={selectedPartIds.has(part.id)}
             opacity={partOpacities.get(part.id) ?? 1}
             onSelect={(additive) => onSelectPart(part.id, additive)}
+            onMeasurePoint={onMeasurePoint}
           />
         )
       ))}
     </group>
+  )
+}
+
+function DistanceAnnotation({
+  points,
+  onReset,
+}: {
+  points: readonly MeasurementPoint[]
+  onReset: () => void
+}) {
+  if (points.length === 0) return null
+
+  const first = new THREE.Vector3(...points[0])
+  const second = points.length === 2 ? new THREE.Vector3(...points[1]) : null
+  const positions = second
+    ? new Float32Array([...first.toArray(), ...second.toArray()])
+    : null
+  const distance = points.length === 2
+    ? getDistanceMillimetres({ points })
+    : null
+  const labelPosition = second
+    ? first.clone().add(second).multiplyScalar(0.5)
+    : first
+
+  return (
+    <group>
+      <mesh position={first} renderOrder={20}>
+        <sphereGeometry args={[0.055, 16, 12]} />
+        <meshBasicMaterial color="#21a7ff" depthTest={false} />
+      </mesh>
+      {second && positions && (
+        <>
+          <mesh position={second} renderOrder={20}>
+            <sphereGeometry args={[0.055, 16, 12]} />
+            <meshBasicMaterial color="#21a7ff" depthTest={false} />
+          </mesh>
+          <lineSegments renderOrder={20}>
+            <bufferGeometry>
+              <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+            </bufferGeometry>
+            <lineBasicMaterial color="#21a7ff" depthTest={false} />
+          </lineSegments>
+        </>
+      )}
+      <Html position={labelPosition} center zIndexRange={[40, 0]}>
+        <div style={{ background: '#102331ee', border: '1px solid #4380a3', borderRadius: 4, color: '#eef8ff', font: '600 12px system-ui', padding: '5px 7px', whiteSpace: 'nowrap', pointerEvents: 'auto' }}>
+          {distance === null ? 'Select second point' : formatDistanceMillimetres(distance)}
+          <button type="button" onClick={onReset} aria-label="Clear measurement" style={{ background: 'transparent', border: 0, color: '#9dc8df', cursor: 'pointer', marginLeft: 7, padding: 0 }}>×</button>
+        </div>
+      </Html>
+    </group>
+  )
+}
+
+function MeasurableImportedModel({
+  model,
+  settings,
+  hiddenPartIds,
+  selectedPartIds,
+  partColors,
+  partOpacities,
+  onSelectPart,
+}: {
+  model: ImportedCadBody
+  settings: DisplaySettings
+  hiddenPartIds: ReadonlySet<string>
+  selectedPartIds: ReadonlySet<string>
+  partColors: ReadonlyMap<string, string>
+  partOpacities: ReadonlyMap<string, number>
+  onSelectPart: (partId: string, additive: boolean) => void
+}) {
+  const [measurement, setMeasurement] = useState(emptyDistanceMeasurement)
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMeasurement(emptyDistanceMeasurement)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  return (
+    <>
+      <ImportedModel
+        model={model}
+        settings={settings}
+        hiddenPartIds={hiddenPartIds}
+        selectedPartIds={selectedPartIds}
+        partColors={partColors}
+        partOpacities={partOpacities}
+        onSelectPart={onSelectPart}
+        onMeasurePoint={(point) => {
+          setMeasurement((current) => addDistancePoint(current, point))
+        }}
+      />
+      <DistanceAnnotation
+        points={measurement.points}
+        onReset={() => setMeasurement(emptyDistanceMeasurement)}
+      />
+    </>
   )
 }
 
@@ -614,6 +734,7 @@ export function CadViewport({
   partOpacities = new Map<string, number>(),
   onSelectPart = () => undefined,
   onClearSelection = () => undefined,
+  measurementEnabled = false,
 }: CadViewportProps) {
   const lightStrength =
     settings.brightness
@@ -742,15 +863,28 @@ export function CadViewport({
 
       {model ? (
         <>
-          <ImportedModel
-            model={model}
-            settings={settings}
-            hiddenPartIds={hiddenPartIds}
-            selectedPartIds={selectedPartIds}
-            partColors={partColors}
-            partOpacities={partOpacities}
-            onSelectPart={onSelectPart}
-          />
+          {measurementEnabled ? (
+            <MeasurableImportedModel
+              key={model.bodyId}
+              model={model}
+              settings={settings}
+              hiddenPartIds={hiddenPartIds}
+              selectedPartIds={selectedPartIds}
+              partColors={partColors}
+              partOpacities={partOpacities}
+              onSelectPart={onSelectPart}
+            />
+          ) : (
+            <ImportedModel
+              model={model}
+              settings={settings}
+              hiddenPartIds={hiddenPartIds}
+              selectedPartIds={selectedPartIds}
+              partColors={partColors}
+              partOpacities={partOpacities}
+              onSelectPart={onSelectPart}
+            />
+          )}
           <ContactShadows
             position={[0, -0.002, 0]}
             opacity={0.32}

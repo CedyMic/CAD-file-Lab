@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+
+import {
+  addDistancePoint,
+  emptyDistanceMeasurement,
+  formatDistanceMillimetres,
+  getDistanceMillimetres,
+  pointToPointDistance,
+} from '../src/viewer/measurement.ts'
+
+test('calculates a three-dimensional point-to-point distance', () => {
+  assert.equal(pointToPointDistance([1, 2, 3], [4, 6, 15]), 13)
+})
+
+test('selects two points and starts a fresh measurement on the third', () => {
+  const one = addDistancePoint(emptyDistanceMeasurement, [0, 0, 0])
+  const two = addDistancePoint(one, [3, 4, 0])
+  assert.equal(getDistanceMillimetres(two), 5)
+
+  const restarted = addDistancePoint(two, [9, 8, 7])
+  assert.deepEqual(restarted.points, [[9, 8, 7]])
+  assert.equal(getDistanceMillimetres(restarted), null)
+})
+
+test('rejects invalid points and formats millimetres at useful precision', () => {
+  assert.throws(
+    () => addDistancePoint(emptyDistanceMeasurement, [0, Number.NaN, 0]),
+    /finite coordinates/,
+  )
+  assert.equal(formatDistanceMillimetres(4.1254), '4.125 mm')
+  assert.equal(formatDistanceMillimetres(42.125), '42.13 mm')
+  assert.equal(formatDistanceMillimetres(420.15), '420.1 mm')
+})
