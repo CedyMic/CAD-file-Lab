@@ -1429,6 +1429,10 @@ function App() {
                     <a href="/TERMS_OF_USE.txt" target="_blank" rel="noreferrer">
                       hosted service terms
                     </a>
+                    , and the{' '}
+                    <a href="/IMPRINT.txt" target="_blank" rel="noreferrer">
+                      provider notice
+                    </a>
                     .
                   </p>
                 </article>

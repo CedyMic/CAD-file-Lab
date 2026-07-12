@@ -1,0 +1,22 @@
+CAD FILE LAB - PROVIDER NOTICE / IMPRESSUM
+==========================================
+
+Information pursuant to Section 5 of the German Digital Services Act (DDG)
+
+Service provider and person responsible for the content:
+
+Cedric Takem
+Hegelstrasse 27
+70734 Fellbach
+Germany
+
+Email: admin@cadfilelab.com
+Website: https://cadfilelab.com
+
+CAD File Lab is currently operated by Cedric Takem as an individual. No
+commercial-register, VAT-identification, regulated-profession, or supervisory-
+authority information is stated because none has been represented as
+applicable. This notice must be updated before such status changes.
+
+Third-party software notices and the OCCT source/relinking offer are available
+from the Help panel of the website.

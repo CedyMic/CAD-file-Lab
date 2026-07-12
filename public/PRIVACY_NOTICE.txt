@@ -3,6 +3,16 @@ CAD FILE LAB - PRIVACY NOTICE
 
 Last updated: 2026-07-12
 
+Controller
+----------
+
+Cedric Takem
+Hegelstrasse 27
+70734 Fellbach
+Germany
+
+Privacy contact: admin@cadfilelab.com
+
 Application processing
 ----------------------
 
@@ -25,17 +35,37 @@ signals, to deliver and protect the site. That infrastructure processing is
 separate from CAD model processing. Consult the Cloudflare privacy policy for
 its current practices: https://www.cloudflare.com/privacypolicy/
 
+The purpose is reliable and secure delivery of the website. The operator's
+legal basis for necessary request-log processing is the legitimate interest in
+providing and protecting the service (Article 6(1)(f) GDPR). Cloudflare may
+process data outside Germany under the safeguards described in its current
+privacy and data-processing terms. Retention of infrastructure logs follows
+the configured Cloudflare service and security settings; contact the operator
+for information about a specific request.
+
+Device storage
+--------------
+
+IndexedDB recovery storage is used only when the visitor enables or uses the
+local recovery feature. It is necessary to provide the requested browser-local
+save/recovery functionality and is never read by the application server. The
+visitor can erase it using "Clear local recovery data" in the project panel or
+through browser site-data controls.
+
 Third-party links
 -----------------
 
 The notices and source-offer documents contain links to third-party source and
 license sites. Opening those links sends a normal web request to that provider.
 
-Operator information
---------------------
+Rights
+------
 
-Before a public commercial launch, the site operator must add its legal name,
-postal address, privacy contact, applicable jurisdiction, and any additional
-mandatory regional disclosures here. Until then, this notice documents the
-application's verified technical behavior but is not a jurisdiction-specific
-privacy policy.
+Subject to applicable law, data subjects may request access, rectification,
+erasure, restriction, portability, or objection concerning personal data
+processed by the operator. Requests can be sent to admin@cadfilelab.com. Data
+subjects may also complain to a competent supervisory authority, including the
+State Commissioner for Data Protection and Freedom of Information of Baden-
+Wuerttemberg: https://www.baden-wuerttemberg.datenschutz.de/
+
+No automated decision-making or profiling is performed by the application.

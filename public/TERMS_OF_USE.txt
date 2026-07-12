@@ -3,6 +3,12 @@ CAD FILE LAB - HOSTED SERVICE TERMS
 
 Last updated: 2026-07-12
 
+Operator
+--------
+
+Cedric Takem, Hegelstrasse 27, 70734 Fellbach, Germany
+Contact: admin@cadfilelab.com
+
 Visitors may use the functionality intentionally exposed by the hosted CAD
 File Lab website. They retain rights in files they provide and may use results
 created from their content. Visitors are responsible for having the right to
@@ -27,6 +33,13 @@ The service is provided as-is and without warranty to the maximum extent
 permitted by applicable law. Nothing in these terms excludes rights or
 remedies that cannot legally be excluded.
 
-Before a public commercial launch, the operator must add its legal identity,
-contact details, governing-law choice, consumer disclosures, and any required
-age, export-control, or acceptable-use terms appropriate to the launch market.
+The hosted service is intended to be accessible worldwide where lawful. Users
+must not use it in violation of export controls, sanctions, intellectual-
+property rights, or other applicable law. The operator does not warrant that
+the service is lawful or suitable in every jurisdiction.
+
+German law applies to the extent a governing-law choice is permitted. For
+consumers, this does not remove mandatory protections of the country in which
+they habitually reside. The exclusive-place-of-jurisdiction language often
+used for businesses is intentionally omitted because no business-only user
+restriction is imposed.

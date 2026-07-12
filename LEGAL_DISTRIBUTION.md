@@ -132,13 +132,16 @@ binaries or `node_modules` are distributed.
 - [ ] Obtain a legal review appropriate to the intended distribution model.
 - [x] Rebuild and verify that notices are included in the released app.
 
-## Operator-supplied information still required
+## Operator disclosures
 
-Engineering cannot invent the operator's legal identity. Before a public
-commercial launch, add the copyright holder/operator's legal name, postal
-address, privacy contact, launch jurisdictions, and any locally required
-consumer or business disclosures to `LICENSE`, `public/PRIVACY_NOTICE.txt`, and
-`public/TERMS_OF_USE.txt`. This is the only known release item that requires a
-business decision rather than a code or provenance fix.
+The operator identified himself as Cedric Takem, Hegelstrasse 27, 70734
+Fellbach, Germany, with `admin@cadfilelab.com` as the contact address. The
+production build includes a DDG provider notice, GDPR-oriented privacy notice,
+and hosted-service terms. The service is intended to be accessible worldwide
+where lawful, while preserving mandatory local consumer protections.
+
+Update these documents before the operator, address, business form, register
+status, VAT status, regulated-profession status, data flow, monetization, or
+launch model changes.
 
 No deployment or legal opinion was produced as part of this provenance fix.
