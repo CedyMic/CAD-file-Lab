@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "component": "Open CASCADE Technology WebAssembly kernel",
+  "artifact": {
+    "file": "replicad_single.wasm",
+    "sha256": "2e07c45b83267b38d3102ec411fad11e7ce2ed71854084e461c5ab5fee94aaff",
+    "gitBlob": "bfac894f53565c382c0af3b065e06835af457930"
+  },
+  "replicad": {
+    "package": "replicad-opencascadejs@0.23.0",
+    "releaseCommit": "19fb8212e0bb12a07a7a49f96950f8903903d469",
+    "artifactCommit": "bcc344da9a02066702ba7452b7b652112886cb94"
+  },
+  "buildImage": {
+    "reference": "donalffons/opencascade.js@sha256:3069f4c2e3ab62bb82d81843bad2c0f8552ee92373208f8f655ef9bf71c0524d",
+    "lastPushed": "2023-03-23T11:48:36.134545Z",
+    "sourceCommit": "b5ff9847200016dce0d92fe747fc38a945771dc5"
+  },
+  "opencascade": {
+    "sourceCommit": "bb368e271e24f63078129283148ce83db6b9670a",
+    "license": "LGPL-2.1-only with the OCCT additional exception"
+  },
+  "toolchain": {
+    "emscripten": "3.1.14"
+  },
+  "sourceOffer": "/OCCT_SOURCE_OFFER.txt"
+}

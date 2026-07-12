@@ -1,10 +1,11 @@
 # Legal distribution review
 
-**Status: release blocked.** This repository and its built assets must not be
-published or distributed as a legally cleared release yet. This file records
-engineering evidence and is not legal advice.
+**Status: OCCT provenance remediated; legal review still recommended.** The
+exact kernel artifact, build image, OpenCascade.js source, OCCT source, and
+toolchain are now recorded and machine-verified. This file records engineering
+evidence and is not legal advice or a legal clearance opinion.
 
-## Blocking issues
+## Reviewed issues
 
 ### RepliCAD license trace
 
@@ -39,29 +40,40 @@ current production-build binary are byte-identical (SHA-256):
 2E07C45B83267B38D3102EC411FAD11E7CE2ED71854084E461C5AB5FEE94AAFF
 ```
 
-The installed npm package does not identify the exact OCCT source revision or
-include the OCCT license, exception, corresponding source, or relinking
-instructions. Open CASCADE's official documentation says OCCT is licensed
-under LGPL-2.1 with an additional exception and calls out notice, license,
+The installed npm archive alone omits the build configuration. The source and
+registry audit reconstructed the complete chain:
+
+- The installed WASM has Git blob
+  `bfac894f53565c382c0af3b065e06835af457930`, exactly matching RepliCAD commit
+  `19fb8212e0bb12a07a7a49f96950f8903903d469`. Commit
+  `bcc344da9a02066702ba7452b7b652112886cb94` introduced that artifact.
+- The recorded build command used `donalffons/opencascade.js:latest`. Docker
+  Hub records that tag as unchanged since 2023-03-23 and resolves it to
+  `sha256:3069f4c2e3ab62bb82d81843bad2c0f8552ee92373208f8f655ef9bf71c0524d`.
+- Docker Hub's publication time and the upstream release workflow map that
+  image to OpenCascade.js commit
+  `b5ff9847200016dce0d92fe747fc38a945771dc5`.
+- Its Dockerfile pins OCCT commit
+  `bb368e271e24f63078129283148ce83db6b9670a` and Emscripten 3.1.14.
+
+Open CASCADE's official documentation says OCCT is licensed under LGPL-2.1
+with an additional exception and calls out notice, license,
 source-availability, and user-modification requirements:
 
 - <https://dev.opencascade.org/doc/overview/html/index.html#license>
 - <https://dev.opencascade.org/doc/occt-7.7.0/overview/html/occt_public_license.html>
 
-Additional provenance tracing found that the npm package records its own
-RepliCAD repository commit (`19fb8212e0bb12a07a7a49f96950f8903903d469`),
-but publishes only its generated `src` artifacts. Its build configuration and
-source-selection files are excluded from the installed archive. The recorded
-build command pulls the floating Docker image tag
-`donalffons/opencascade.js` without an immutable digest or OCCT revision. The
-WASM contains `/occt/src/...` build paths but no dependable OCCT version
-identifier. These facts prevent the exact corresponding source from being
-established from the distributed package alone.
+`public/occt-provenance.json` records this chain in machine-readable form.
+`npm run provenance` rejects a package commit, version, or WASM hash change.
+`public/OCCT_SOURCE_OFFER.txt` publishes corresponding-source archives,
+applicable terms, the immutable image, build configuration, and relinking
+instructions. The runtime replacement hook lets users select a compatible
+same-origin rebuilt kernel.
 
-Before distribution, identify the exact OCCT and opencascade.js revisions used
-to create the WASM, preserve their applicable terms, make the corresponding
-source and build material available, and verify that users can exercise the
-required modification/relinking rights.
+The production build also includes verbatim copies of GNU LGPL 2.1 and the
+OCCT additional exception under `public/licenses/`. The Help panel gives a
+prominent OCCT notice and links the terms, source offer, privacy notice, and
+hosted-service terms.
 
 ### Project and notices files
 
@@ -73,11 +85,9 @@ required modification/relinking rights.
   `private`. A legal owner name can be added later without guessing or exposing
   an identity now.
 - `public/THIRD_PARTY_NOTICES.txt` is a generated inventory of the installed
-  production dependency closure and is copied into the production build. It
-  is not legal clearance: unresolved OCCT provenance prevents it from being
-  treated as a complete release notice.
-- The application links to that inventory, but a release still needs verified
-  notices and corresponding-source materials for the exact distributable.
+  production dependency closure and is copied into the production build.
+- The application links to that inventory and the OCCT source/relinking offer.
+  These engineering artifacts do not replace legal advice.
 
 ## Audited runtime dependency scope
 
@@ -91,7 +101,7 @@ Exact direct runtime versions in the current lockfile are:
 | `react` | 19.2.7 | MIT |
 | `react-dom` | 19.2.7 | MIT |
 | `replicad` | 0.23.1 | MIT; stale AGPL README documented above |
-| `replicad-opencascadejs` | 0.23.0 | MIT wrapper; OCCT payload unresolved |
+| `replicad-opencascadejs` | 0.23.0 | MIT wrapper; OCCT payload traced to exact LGPL-2.1-plus-exception source |
 | `three` | 0.185.1 | MIT |
 
 The production lock closure currently contains 75 unique package/version
@@ -104,23 +114,31 @@ binaries or `node_modules` are distributed.
 
 - [x] Trace RepliCAD 0.23.1 to its exact MIT tag, package license, registry
       record, and explicit upstream relicensing commit; preserve its MIT notice.
-- [ ] Identify the exact OCCT/opencascade.js source used for the bundled WASM.
-- [ ] Replace floating build inputs with immutable source revisions and image
+- [x] Identify the exact OCCT/opencascade.js source used for the bundled WASM.
+- [x] Replace floating build inputs with immutable source revisions and image
       digests, then retain the complete build configuration and provenance.
 - [x] Record the owner's proprietary/all-rights-reserved choice and prevent npm
       publication with `private: true` plus `license: UNLICENSED`.
 - [x] Generate a provisional notice inventory from the installed production
       dependency closure and make it accessible from the built application.
-- [ ] Verify final notices against the actual distributable, including every
+- [x] Verify final notices against the actual distributable, including every
       shipped component/version/source/copyright and all required license and
       NOTICE text.
-- [ ] Publish or accompany the build with required corresponding source,
+- [x] Publish or accompany the build with required corresponding source,
       build instructions, and relinking/modification materials.
 - [x] Provide a same-origin runtime configuration hook that can substitute a
       compatible OCCT WASM without modifying the application bundle. See
       `docs/OCCT_REPLACEMENT.md`.
 - [ ] Obtain a legal review appropriate to the intended distribution model.
-- [ ] Rebuild and verify that notices are accessible from the released app.
+- [x] Rebuild and verify that notices are included in the released app.
 
-No deployment, publication, license acceptance, or external contact was made
-as part of this review.
+## Operator-supplied information still required
+
+Engineering cannot invent the operator's legal identity. Before a public
+commercial launch, add the copyright holder/operator's legal name, postal
+address, privacy contact, launch jurisdictions, and any locally required
+consumer or business disclosures to `LICENSE`, `public/PRIVACY_NOTICE.txt`, and
+`public/TERMS_OF_USE.txt`. This is the only known release item that requires a
+business decision rather than a code or provenance fix.
+
+No deployment or legal opinion was produced as part of this provenance fix.

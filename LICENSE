@@ -31,5 +31,11 @@ Third-party software and materials included with or used by this project are
 not covered by this proprietary notice. They remain subject to their
 respective copyright notices and license terms. See LEGAL_DISTRIBUTION.md.
 
+Notwithstanding the proprietary restrictions above, reverse engineering and
+modification are permitted to the extent required to debug modifications to,
+replace, or relink an LGPL-covered component used by the application. No
+restriction in this notice limits a right granted by the GNU LGPL or the OCCT
+additional exception.
+
 THE ORIGINAL MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 EXPRESS OR IMPLIED, TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW.
