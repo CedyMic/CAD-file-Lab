@@ -43,7 +43,7 @@ interface CadViewportProps {
   settings?: DisplaySettings
   viewCommand?: ViewCommand | null
   hiddenPartIds?: ReadonlySet<string>
-  selectedPartId?: string | null
+  selectedPartIds?: ReadonlySet<string>
   partColors?: ReadonlyMap<string, string>
   partOpacities?: ReadonlyMap<string, number>
 }
@@ -312,8 +312,8 @@ function ImportedPart({
       <mesh geometry={faceGeometry}>
         <meshStandardMaterial
           color={color}
-          emissive={selected ? '#1d6fae' : '#000000'}
-          emissiveIntensity={selected ? 0.22 : 0}
+          emissive={selected ? '#b86b00' : '#000000'}
+          emissiveIntensity={selected ? 0.28 : 0}
           metalness={0.04}
           roughness={0.58}
           wireframe={isWireframe}
@@ -341,6 +341,17 @@ function ImportedPart({
           />
         </lineSegments>
       )}
+
+      {selected && (
+        <lineSegments geometry={edgeGeometry} renderOrder={10}>
+          <lineBasicMaterial
+            color="#ffad24"
+            depthTest={false}
+            transparent
+            opacity={0.95}
+          />
+        </lineSegments>
+      )}
     </group>
   )
 }
@@ -349,14 +360,14 @@ function ImportedModel({
   model,
   settings,
   hiddenPartIds,
-  selectedPartId,
+  selectedPartIds,
   partColors,
   partOpacities,
 }: {
   model: ImportedCadBody
   settings: DisplaySettings
   hiddenPartIds: ReadonlySet<string>
-  selectedPartId: string | null
+  selectedPartIds: ReadonlySet<string>
   partColors: ReadonlyMap<string, string>
   partOpacities: ReadonlyMap<string, number>
 }) {
@@ -383,7 +394,7 @@ function ImportedModel({
             settings={settings}
             modelPosition={modelPosition}
             color={partColors.get(part.id) ?? settings.modelColor}
-            selected={selectedPartId === part.id}
+            selected={selectedPartIds.has(part.id)}
             opacity={partOpacities.get(part.id) ?? 1}
           />
         )
@@ -580,7 +591,7 @@ export function CadViewport({
     defaultDisplaySettings,
   viewCommand = null,
   hiddenPartIds = new Set<string>(),
-  selectedPartId = null,
+  selectedPartIds = new Set<string>(),
   partColors = new Map<string, string>(),
   partOpacities = new Map<string, number>(),
 }: CadViewportProps) {
@@ -697,7 +708,7 @@ export function CadViewport({
           model={model}
           settings={settings}
           hiddenPartIds={hiddenPartIds}
-          selectedPartId={selectedPartId}
+          selectedPartIds={selectedPartIds}
           partColors={partColors}
           partOpacities={partOpacities}
         />

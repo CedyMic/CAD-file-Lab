@@ -168,7 +168,7 @@ function App() {
       null,
     )
 
-  const [selectedPartId, setSelectedPartId] = useState<string | null>(null)
+  const [selectedPartIds, setSelectedPartIds] = useState<Set<string>>(() => new Set())
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(() => new Set())
   const [partColors, setPartColors] = useState<Map<string, string>>(() => new Map())
   const [partOpacities, setPartOpacities] = useState<Map<string, number>>(() => new Map())
@@ -229,11 +229,12 @@ function App() {
         tool.id === activeTool,
     ) ?? tools[0]
 
-  const selectedPart = model?.renderParts.find((part) => part.id === selectedPartId) ?? null
+  const selectedParts = model?.renderParts.filter((part) => selectedPartIds.has(part.id)) ?? []
+  const selectedPart = selectedParts[0] ?? null
 
   function installModel(nextModel: ImportedCadBody) {
     setModel(nextModel)
-    setSelectedPartId(nextModel.renderParts[0]?.id ?? null)
+    setSelectedPartIds(new Set(nextModel.renderParts[0] ? [nextModel.renderParts[0].id] : []))
     setHiddenPartIds(new Set())
     setPartColors(new Map())
     setPartOpacities(new Map())
@@ -248,18 +249,42 @@ function App() {
     })
   }
 
-  function setPartColor(partId: string, color: string) {
-    setPartColors((current) => {
-      const next = new Map(current)
-      next.set(partId, color)
+  function togglePartSelection(partId: string) {
+    setSelectedPartIds((current) => {
+      const next = new Set(current)
+      if (next.has(partId)) next.delete(partId)
+      else next.add(partId)
       return next
     })
   }
 
-  function setPartOpacity(partId: string, opacity: number) {
+  function selectAllParts() {
+    setSelectedPartIds(new Set(model?.renderParts.map((part) => part.id) ?? []))
+  }
+
+  function setSelectedPartsColor(color: string) {
+    setPartColors((current) => {
+      const next = new Map(current)
+      for (const part of selectedParts) next.set(part.id, color)
+      return next
+    })
+  }
+
+  function setSelectedPartsOpacity(opacity: number) {
     setPartOpacities((current) => {
       const next = new Map(current)
-      next.set(partId, opacity)
+      for (const part of selectedParts) next.set(part.id, opacity)
+      return next
+    })
+  }
+
+  function setSelectedPartsVisibility(visible: boolean) {
+    setHiddenPartIds((current) => {
+      const next = new Set(current)
+      for (const part of selectedParts) {
+        if (visible) next.delete(part.id)
+        else next.add(part.id)
+      }
       return next
     })
   }
@@ -1136,6 +1161,13 @@ function App() {
               {model && <span>{model.bodySummaries.length} {model.bodySummaries.length === 1 ? 'body' : 'bodies'}</span>}
             </div>
 
+            {model && model.bodySummaries.length > 1 && (
+              <div className="model-tree-selection-actions">
+                <button type="button" onClick={selectAllParts}>Select all</button>
+                <button type="button" onClick={() => setSelectedPartIds(new Set())}>Clear</button>
+              </div>
+            )}
+
             {model ? (
               <ul>
                 <li className="model-tree-file">
@@ -1144,15 +1176,15 @@ function App() {
                 </li>
                 {model.bodySummaries.map((body) => (
                   <li
-                    className={`model-tree-body${selectedPartId === body.id ? ' selected' : ''}${hiddenPartIds.has(body.id) ? ' hidden' : ''}`}
+                    className={`model-tree-body${selectedPartIds.has(body.id) ? ' selected' : ''}${hiddenPartIds.has(body.id) ? ' hidden' : ''}`}
                     key={body.id}
                   >
                     <span aria-hidden="true">◇</span>
                     <button
                       className="body-select-button"
                       type="button"
-                      onClick={() => setSelectedPartId(body.id)}
-                      aria-pressed={selectedPartId === body.id}
+                      onClick={() => togglePartSelection(body.id)}
+                      aria-pressed={selectedPartIds.has(body.id)}
                     >
                       <span className="body-color-dot" style={{ background: partColors.get(body.id) ?? displaySettings.modelColor }} aria-hidden="true" />
                       <span>{body.name}</span>
@@ -1365,7 +1397,7 @@ function App() {
                 viewCommand
               }
               hiddenPartIds={hiddenPartIds}
-              selectedPartId={selectedPartId}
+              selectedPartIds={selectedPartIds}
               partColors={partColors}
               partOpacities={partOpacities}
             />
@@ -1494,7 +1526,11 @@ function App() {
           <header>
             <div>
               <span className="panel-label">Properties</span>
-              <strong>{selectedPart?.name ?? (model ? 'Model display' : 'No selection')}</strong>
+              <strong>
+                {selectedParts.length > 1
+                  ? `${selectedParts.length} bodies selected`
+                  : selectedPart?.name ?? (model ? 'No body selected' : 'No selection')}
+              </strong>
             </div>
           </header>
 
@@ -1507,7 +1543,7 @@ function App() {
                     <input
                       type="color"
                       value={partColors.get(selectedPart.id) ?? displaySettings.modelColor}
-                      onChange={(event) => setPartColor(selectedPart.id, event.target.value)}
+                      onChange={(event) => setSelectedPartsColor(event.target.value)}
                     />
                   </label>
                   <label className="body-opacity-field">
@@ -1519,12 +1555,15 @@ function App() {
                       max="1"
                       step="0.05"
                       value={partOpacities.get(selectedPart.id) ?? 1}
-                      onChange={(event) => setPartOpacity(selectedPart.id, Number(event.target.value))}
-                      aria-label={`${selectedPart.name} opacity`}
+                      onChange={(event) => setSelectedPartsOpacity(Number(event.target.value))}
+                      aria-label="Selected bodies opacity"
                     />
                   </label>
-                  <button type="button" onClick={() => togglePartVisibility(selectedPart.id)}>
-                    {hiddenPartIds.has(selectedPart.id) ? 'Show body' : 'Hide body'}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPartsVisibility(selectedParts.every((part) => hiddenPartIds.has(part.id)))}
+                  >
+                    {selectedParts.every((part) => hiddenPartIds.has(part.id)) ? 'Show selected' : 'Hide selected'}
                   </button>
                 </section>
               )}
