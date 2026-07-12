@@ -1321,13 +1321,23 @@ function App() {
                   </article>
                 </div>
                 <div className="format-support" aria-label="Supported 3D file formats">
-                  <strong>Supported formats</strong>
+                  <strong>Available now</strong>
                   <div className="format-badges">
                     <span>STEP <small>.step</small></span>
                     <span>STP <small>.stp</small></span>
                     <span>STL <small>.stl</small></span>
                   </div>
                   <small>Files up to 256 MiB · STL is view-only · More formats are in development</small>
+                  <strong className="planned-formats-label">Planned import support</strong>
+                  <div className="format-badges planned-format-badges" aria-label="Planned 3D file formats">
+                    <span>OBJ <small>.obj</small></span>
+                    <span>PLY <small>.ply</small></span>
+                    <span>GLB <small>.glb</small></span>
+                    <span>glTF <small>.gltf</small></span>
+                    <span>3MF <small>.3mf</small></span>
+                    <span>IGES <small>.iges / .igs</small></span>
+                    <span>BREP <small>.brep</small></span>
+                  </div>
                 </div>
                 <ol className="getting-started-steps">
                   <li><strong>Open</strong><span>Choose or drop a supported file</span></li>

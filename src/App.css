@@ -779,6 +779,11 @@ textarea:focus-visible {
   text-transform: uppercase;
 }
 
+.format-support .planned-formats-label {
+  margin-top: 4px;
+  color: #6b7d8d;
+}
+
 .format-badges {
   display: flex;
   justify-content: center;
@@ -798,6 +803,22 @@ textarea:focus-visible {
 .format-badges small {
   color: #50789d;
   font-weight: 600;
+}
+
+.planned-format-badges {
+  flex-wrap: wrap;
+}
+
+.planned-format-badges span {
+  padding: 5px 8px;
+  color: #5e6e7c;
+  background: #f3f5f7;
+  border-color: #d6dde3;
+  font-size: 10px;
+}
+
+.planned-format-badges small {
+  color: #7b8995;
 }
 
 .format-support > small {
