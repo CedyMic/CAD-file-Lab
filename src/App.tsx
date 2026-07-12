@@ -995,14 +995,18 @@ function App() {
             ref={fileInputRef}
             hidden
             type="file"
-            accept=".step,.stp,.stl"
+            accept=".step,.stp,.stl,.cadlab"
             onChange={(event) => {
               const file =
                 event.target.files?.[0]
 
               event.target.value = ''
 
-              void handleFile(file)
+              if (file?.name.toLowerCase().endsWith(CAD_LAB_PROJECT_EXTENSION)) {
+                void openProjectFile(file)
+              } else {
+                void handleFile(file)
+              }
             }}
           />
 
@@ -1027,14 +1031,16 @@ function App() {
         <div className="ribbon-group">
           <span className="ribbon-group-label">File</span>
           <div>
-            <button type="button" onClick={openFilePicker} disabled={isLoading} title="Import an original 3D model file">
-              <strong>Open Model</strong><span>3D format</span>
+            <button type="button" onClick={openFilePicker} disabled={isLoading} title="Open a 3D model or resume saved CAD File Lab work">
+              <strong>Open</strong><span>Model or saved work</span>
             </button>
-            <button type="button" onClick={openProjectFilePicker} disabled={isLoading} title="Reopen a workspace previously saved by CAD File Lab">
-              <strong>Open Project</strong><span>Saved .cadlab workspace</span>
-            </button>
-            <button type="button" onClick={() => void saveProjectFile()} disabled={!model?.editable || isLoading} title="Save geometry and workspace settings as a local CAD Lab project">
-              <strong>Save Project</strong><span>Workspace copy</span>
+            <button
+              type="button"
+              onClick={() => void saveCurrentRecovery()}
+              disabled={!model?.editable || !localRecoveryEnabled || isLoading || isSavingRecovery}
+              title="Save the current work immediately in private browser storage"
+            >
+              <strong>Save</strong><span>Protect current work</span>
             </button>
           </div>
         </div>
