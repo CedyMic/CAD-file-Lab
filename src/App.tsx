@@ -292,7 +292,12 @@ function App() {
   }
 
   useEffect(() => {
-    function handleSelectAllShortcut(event: KeyboardEvent) {
+    function handleWorkspaceShortcuts(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setSelectedPartIds(new Set())
+        return
+      }
+
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'a' || !model) return
 
       const target = event.target as HTMLElement | null
@@ -302,8 +307,8 @@ function App() {
       setSelectedPartIds(new Set(model.renderParts.map((part) => part.id)))
     }
 
-    window.addEventListener('keydown', handleSelectAllShortcut)
-    return () => window.removeEventListener('keydown', handleSelectAllShortcut)
+    window.addEventListener('keydown', handleWorkspaceShortcuts)
+    return () => window.removeEventListener('keydown', handleWorkspaceShortcuts)
   }, [model])
 
   function installModel(nextModel: ImportedCadBody) {
