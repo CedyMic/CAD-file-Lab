@@ -445,9 +445,42 @@ textarea:focus-visible {
   min-width: 180px;
 }
 
-.format-note {
-  margin: 11px 0 20px;
-  display: block;
+.format-support {
+  margin: 14px 0 20px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.format-support > strong {
+  color: #34495c;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.format-badges {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.format-badges span {
+  padding: 7px 11px;
+  color: #0f579f;
+  background: #edf6ff;
+  border: 1px solid #b9d9f8;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.format-badges small {
+  color: #50789d;
+  font-weight: 600;
+}
+
+.format-support > small {
   color: #687b8c;
   font-size: 11px;
 }

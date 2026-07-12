@@ -1283,9 +1283,14 @@ function App() {
                 <button className="primary-button" type="button" onClick={openFilePicker}>
                   Choose a 3D file
                 </button>
-                <span className="format-note">
-                  Viewing available now: STEP and STP · Modify and create are in development
-                </span>
+                <div className="format-support" aria-label="Supported 3D file formats">
+                  <strong>Supported formats</strong>
+                  <div className="format-badges">
+                    <span>STEP <small>.step</small></span>
+                    <span>STP <small>.stp</small></span>
+                  </div>
+                  <small>Files up to 256 MiB · More formats are in development</small>
+                </div>
                 <ol className="getting-started-steps">
                   <li><strong>Open</strong><span>Choose or drop a supported file</span></li>
                   <li><strong>Inspect</strong><span>Orbit, zoom, pan and fit the model</span></li>
