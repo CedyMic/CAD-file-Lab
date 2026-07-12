@@ -1408,9 +1408,26 @@ function App() {
                 <article>
                   <h3>Open-source notices</h3>
                   <p>
-                    CAD File Lab uses open-source software. Read the{' '}
+                    CAD File Lab uses Open CASCADE Technology under GNU LGPL 2.1
+                    with the OCCT additional exception. You may replace the
+                    browser CAD kernel with a compatible modified build. Read the{' '}
                     <a href="/THIRD_PARTY_NOTICES.txt" target="_blank" rel="noreferrer">
                       third-party software notices
+                    </a>
+                    {' '}and the{' '}
+                    <a href="/OCCT_SOURCE_OFFER.txt" target="_blank" rel="noreferrer">
+                      OCCT source and relinking offer
+                    </a>
+                    .
+                  </p>
+                  <p>
+                    Read the{' '}
+                    <a href="/PRIVACY_NOTICE.txt" target="_blank" rel="noreferrer">
+                      privacy notice
+                    </a>
+                    {' '}and{' '}
+                    <a href="/TERMS_OF_USE.txt" target="_blank" rel="noreferrer">
+                      hosted service terms
                     </a>
                     .
                   </p>

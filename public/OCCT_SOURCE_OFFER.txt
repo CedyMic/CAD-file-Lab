@@ -1,0 +1,75 @@
+CAD FILE LAB - OPEN CASCADE SOURCE AND RELINKING OFFER
+=====================================================
+
+CAD File Lab uses an Open CASCADE Technology (OCCT) WebAssembly kernel.
+OCCT is licensed under GNU LGPL 2.1 with the OCCT additional exception.
+You may inspect, modify, rebuild, and substitute a compatible kernel.
+
+Exact distributed artifact
+--------------------------
+
+File: replicad_single.wasm
+SHA-256: 2e07c45b83267b38d3102ec411fad11e7ce2ed71854084e461c5ab5fee94aaff
+Git blob: bfac894f53565c382c0af3b065e06835af457930
+
+Complete provenance chain
+-------------------------
+
+1. RepliCAD package release and binding configuration:
+   https://github.com/sgenoud/replicad/tree/19fb8212e0bb12a07a7a49f96950f8903903d469/packages/replicad-opencascadejs
+
+2. Commit that introduced the exact distributed WASM artifact:
+   https://github.com/sgenoud/replicad/commit/bcc344da9a02066702ba7452b7b652112886cb94
+
+3. Immutable OpenCascade.js build image:
+   donalffons/opencascade.js@sha256:3069f4c2e3ab62bb82d81843bad2c0f8552ee92373208f8f655ef9bf71c0524d
+
+4. OpenCascade.js source used to publish that image:
+   https://github.com/donalffons/opencascade.js/tree/b5ff9847200016dce0d92fe747fc38a945771dc5
+
+5. Exact OCCT source pinned by that image:
+   https://github.com/Open-Cascade-SAS/OCCT/tree/bb368e271e24f63078129283148ce83db6b9670a
+
+6. Emscripten SDK version pinned by that image: 3.1.14
+
+Downloadable source archives
+----------------------------
+
+RepliCAD binding/build configuration:
+https://github.com/sgenoud/replicad/archive/19fb8212e0bb12a07a7a49f96950f8903903d469.tar.gz
+
+OpenCascade.js build system:
+https://github.com/donalffons/opencascade.js/archive/b5ff9847200016dce0d92fe747fc38a945771dc5.tar.gz
+
+OCCT corresponding source:
+https://github.com/Open-Cascade-SAS/OCCT/archive/bb368e271e24f63078129283148ce83db6b9670a.tar.gz
+
+Applicable terms and exception
+------------------------------
+
+Bundled GNU LGPL 2.1 text:
+/licenses/OCCT-LGPL-2.1.txt
+
+Bundled OCCT additional exception:
+/licenses/OCCT-LGPL-EXCEPTION-1.0.txt
+
+Exact upstream exception text:
+https://github.com/Open-Cascade-SAS/OCCT/blob/bb368e271e24f63078129283148ce83db6b9670a/OCCT_LGPL_EXCEPTION.txt
+
+OCCT license guidance:
+https://dev.opencascade.org/doc/overview/html/index.html#license
+
+Rebuilding and replacement
+--------------------------
+
+Use the binding YAML and additional C++ code under
+packages/replicad-opencascadejs/build-source at the RepliCAD release commit.
+Run them with the immutable build image above. The image pins OCCT and
+Emscripten; using its digest prevents the former floating latest tag from
+changing the build environment.
+
+CAD File Lab loads /occt-kernel.json at runtime. Host a compatible rebuilt
+WASM file on the same origin and set wasmUrl to its relative path. Detailed
+instructions are in docs/OCCT_REPLACEMENT.md in the application source.
+
+No warranty is provided for OCCT, OpenCascade.js, or replacement kernels.

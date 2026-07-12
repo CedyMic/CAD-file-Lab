@@ -1,0 +1,41 @@
+CAD FILE LAB - PRIVACY NOTICE
+=============================
+
+Last updated: 2026-07-12
+
+Application processing
+----------------------
+
+CAD File Lab processes imported CAD files inside the visitor's browser. The
+application does not upload model contents, project files, feedback text, or
+recovery data to an application server. Recovery data is stored in the
+browser's IndexedDB database on the visitor's device and can be erased from
+the application.
+
+The application has no analytics, advertising, account system, or application
+cookies. The feedback tool only copies text to the visitor's clipboard; it
+does not transmit the text.
+
+Hosting data
+------------
+
+The hosting and network provider may necessarily process request metadata,
+including IP address, requested URL, timestamp, user agent, and security
+signals, to deliver and protect the site. That infrastructure processing is
+separate from CAD model processing. Consult the Cloudflare privacy policy for
+its current practices: https://www.cloudflare.com/privacypolicy/
+
+Third-party links
+-----------------
+
+The notices and source-offer documents contain links to third-party source and
+license sites. Opening those links sends a normal web request to that provider.
+
+Operator information
+--------------------
+
+Before a public commercial launch, the site operator must add its legal name,
+postal address, privacy contact, applicable jurisdiction, and any additional
+mandatory regional disclosures here. Until then, this notice documents the
+application's verified technical behavior but is not a jurisdiction-specific
+privacy policy.

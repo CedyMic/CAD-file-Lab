@@ -1,12 +1,11 @@
 CAD FILE LAB - THIRD-PARTY SOFTWARE NOTICES
 
-IMPORTANT DISTRIBUTION STATUS
-=============================
+OPEN CASCADE PROVENANCE
+=======================
 
-This inventory does not clear the application for distribution. RepliCAD 0.23.1 has
-version-specific MIT evidence recorded in LEGAL_DISTRIBUTION.md, but the Open CASCADE
-WebAssembly payload still lacks sufficient source/build provenance in its npm archive.
-Resolve the blockers recorded in LEGAL_DISTRIBUTION.md before publishing any build.
+The bundled Open CASCADE WebAssembly artifact has an exact, machine-verifiable source
+and build chain. See /occt-provenance.json and /OCCT_SOURCE_OFFER.txt for its hash,
+immutable build image, corresponding source, applicable terms, and replacement process.
 
 This file is generated from the production packages installed by package-lock.json.
 It includes license and NOTICE texts for the installed browser application dependencies.

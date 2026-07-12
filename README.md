@@ -14,8 +14,8 @@ files are not uploaded by the application.
 - Browser-local recovery is available and can be erased in the application.
 - Measure, section, modify, and CAD-format export are planned and are labelled
   unavailable.
-- Public distribution is **not legally cleared**. See
-  [LEGAL_DISTRIBUTION.md](./LEGAL_DISTRIBUTION.md).
+- The bundled OCCT kernel has a machine-verified provenance chain and public
+  source/relinking offer. See [LEGAL_DISTRIBUTION.md](./LEGAL_DISTRIBUTION.md).
 
 ## Local development
 
@@ -30,6 +30,7 @@ Quality gates:
 npm test
 npm run lint
 npm run licenses
+npm run provenance
 npm run build
 ```
 
@@ -51,9 +52,9 @@ the application bundle. See
   open model until the user explicitly enables it again.
 - Feedback is prepared for copying and is not transmitted by the application.
 
-Do not deploy or distribute a build until the legal release blockers are
-resolved and the resulting third-party notices and corresponding-source
-materials have been verified.
+Every deployment must retain `/THIRD_PARTY_NOTICES.txt`,
+`/occt-provenance.json`, and `/OCCT_SOURCE_OFFER.txt`. A legal review remains
+recommended for a commercial or high-profile release.
 
 ## Proprietary rights
 

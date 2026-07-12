@@ -1,0 +1,32 @@
+CAD FILE LAB - HOSTED SERVICE TERMS
+===================================
+
+Last updated: 2026-07-12
+
+Visitors may use the functionality intentionally exposed by the hosted CAD
+File Lab website. They retain rights in files they provide and may use results
+created from their content. Visitors are responsible for having the right to
+process any file they select.
+
+The site's original application code, interface, visual design, and original
+documentation remain proprietary and all rights are reserved. Hosted access
+does not grant a right to copy, republish, redistribute, sublicense, or operate
+the proprietary website code.
+
+Third-party components are excluded from those proprietary restrictions and
+remain governed by their respective licenses. In particular, the Open CASCADE
+Technology kernel is available under GNU LGPL 2.1 with the OCCT additional
+exception. Its license, exception, exact source, build provenance, and
+replacement instructions are linked from the application's Help panel.
+Reverse engineering and modification are permitted to the extent required to
+debug modifications to, replace, or relink an LGPL-covered component. No
+proprietary restriction limits rights granted by the GNU LGPL or OCCT
+additional exception.
+
+The service is provided as-is and without warranty to the maximum extent
+permitted by applicable law. Nothing in these terms excludes rights or
+remedies that cannot legally be excluded.
+
+Before a public commercial launch, the operator must add its legal identity,
+contact details, governing-law choice, consumer disclosures, and any required
+age, export-control, or acceptable-use terms appropriate to the launch market.
