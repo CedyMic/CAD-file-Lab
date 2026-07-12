@@ -1,4 +1,10 @@
 export type MeasurementPoint = readonly [number, number, number]
+export type MeasurementNormal = readonly [number, number, number]
+
+export interface FaceSample {
+  point: MeasurementPoint
+  normal: MeasurementNormal
+}
 
 export interface DistanceMeasurement {
   points: readonly MeasurementPoint[]
@@ -55,4 +61,27 @@ export function formatDistanceMillimetres(distance: number): string {
 
   const decimals = distance >= 100 ? 1 : distance >= 10 ? 2 : 3
   return `${distance.toFixed(decimals)} mm`
+}
+
+export function parallelFaceDistance(
+  first: FaceSample,
+  second: FaceSample,
+  parallelTolerance = 0.995,
+): number | null {
+  const lengthA = Math.hypot(...first.normal)
+  const lengthB = Math.hypot(...second.normal)
+  if (lengthA === 0 || lengthB === 0) throw new Error('Face normals must have a direction.')
+
+  const normalA = first.normal.map((value) => value / lengthA) as unknown as MeasurementNormal
+  const normalB = second.normal.map((value) => value / lengthB) as unknown as MeasurementNormal
+  const alignment = Math.abs(
+    normalA[0] * normalB[0] + normalA[1] * normalB[1] + normalA[2] * normalB[2],
+  )
+  if (alignment < parallelTolerance) return null
+
+  return Math.abs(
+    (second.point[0] - first.point[0]) * normalA[0] +
+    (second.point[1] - first.point[1]) * normalA[1] +
+    (second.point[2] - first.point[2]) * normalA[2],
+  )
 }

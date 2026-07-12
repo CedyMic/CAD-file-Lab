@@ -7,10 +7,25 @@ import {
   formatDistanceMillimetres,
   getDistanceMillimetres,
   pointToPointDistance,
+  parallelFaceDistance,
 } from '../src/viewer/measurement.ts'
 
 test('calculates a three-dimensional point-to-point distance', () => {
   assert.equal(pointToPointDistance([1, 2, 3], [4, 6, 15]), 13)
+})
+
+test('measures the perpendicular gap between parallel planar faces', () => {
+  assert.equal(parallelFaceDistance(
+    { point: [3, 2, 0], normal: [0, 0, 1] },
+    { point: [20, -4, 8], normal: [0, 0, -2] },
+  ), 8)
+})
+
+test('does not report a face gap for nonparallel faces', () => {
+  assert.equal(parallelFaceDistance(
+    { point: [0, 0, 0], normal: [0, 0, 1] },
+    { point: [0, 5, 0], normal: [0, 1, 0] },
+  ), null)
 })
 
 test('selects two points and starts a fresh measurement on the third', () => {

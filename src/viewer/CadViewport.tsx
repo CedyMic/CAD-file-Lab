@@ -37,6 +37,8 @@ import {
   emptyDistanceMeasurement,
   formatDistanceMillimetres,
   getDistanceMillimetres,
+  parallelFaceDistance,
+  type FaceSample,
   type MeasurementPoint,
 } from './measurement'
 
@@ -223,7 +225,7 @@ function ImportedPart({
   selected: boolean
   opacity: number
   onSelect: (additive: boolean) => void
-  onMeasurePoint?: (point: MeasurementPoint) => void
+  onMeasurePoint?: (sample: FaceSample) => void
 }) {
   const faceGeometry =
     useMemo(() => {
@@ -332,7 +334,13 @@ function ImportedPart({
         onClick={(event) => {
           event.stopPropagation()
           if (onMeasurePoint) {
-            onMeasurePoint([event.point.x, event.point.y, event.point.z])
+            const normal = event.face?.normal.clone()
+            if (!normal) return
+            normal.applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(event.object.matrixWorld))
+            onMeasurePoint({
+              point: [event.point.x, event.point.y, event.point.z],
+              normal: [normal.x, normal.y, normal.z],
+            })
             return
           }
           const nativeEvent = event.nativeEvent
@@ -405,7 +413,7 @@ function ImportedModel({
   partColors: ReadonlyMap<string, string>
   partOpacities: ReadonlyMap<string, number>
   onSelectPart: (partId: string, additive: boolean) => void
-  onMeasurePoint?: (point: MeasurementPoint) => void
+  onMeasurePoint?: (sample: FaceSample) => void
 }) {
   const modelPosition = useMemo(() => {
     const positions = convertZUpToYUp(model.faces.vertices)
@@ -443,9 +451,11 @@ function ImportedModel({
 
 function DistanceAnnotation({
   points,
+  faces,
   onReset,
 }: {
   points: readonly MeasurementPoint[]
+  faces: readonly FaceSample[]
   onReset: () => void
 }) {
   if (points.length === 0) return null
@@ -457,6 +467,9 @@ function DistanceAnnotation({
     : null
   const distance = points.length === 2
     ? getDistanceMillimetres({ points })
+    : null
+  const faceDistance = faces.length === 2
+    ? parallelFaceDistance(faces[0], faces[1])
     : null
   const labelPosition = second
     ? first.clone().add(second).multiplyScalar(0.5)
@@ -484,7 +497,12 @@ function DistanceAnnotation({
       )}
       <Html position={labelPosition} center zIndexRange={[40, 0]}>
         <div style={{ background: '#102331ee', border: '1px solid #4380a3', borderRadius: 4, color: '#eef8ff', font: '600 12px system-ui', padding: '5px 7px', whiteSpace: 'nowrap', pointerEvents: 'auto' }}>
-          {distance === null ? 'Select second point' : formatDistanceMillimetres(distance)}
+          {distance === null ? 'Select second point' : `Points ${formatDistanceMillimetres(distance)}`}
+          {distance !== null && (
+            <span style={{ marginLeft: 7, color: faceDistance === null ? '#f0c68c' : '#9de0b4' }}>
+              {faceDistance === null ? 'Faces not parallel' : `Face gap ${formatDistanceMillimetres(faceDistance)}`}
+            </span>
+          )}
           <button type="button" onClick={onReset} aria-label="Clear measurement" style={{ background: 'transparent', border: 0, color: '#9dc8df', cursor: 'pointer', marginLeft: 7, padding: 0 }}>×</button>
         </div>
       </Html>
@@ -509,11 +527,14 @@ function MeasurableImportedModel({
   partOpacities: ReadonlyMap<string, number>
   onSelectPart: (partId: string, additive: boolean) => void
 }) {
-  const [measurement, setMeasurement] = useState(emptyDistanceMeasurement)
+  const [measurement, setMeasurement] = useState({
+    distance: emptyDistanceMeasurement,
+    faces: [] as FaceSample[],
+  })
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMeasurement(emptyDistanceMeasurement)
+      if (event.key === 'Escape') setMeasurement({ distance: emptyDistanceMeasurement, faces: [] })
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -529,13 +550,20 @@ function MeasurableImportedModel({
         partColors={partColors}
         partOpacities={partOpacities}
         onSelectPart={onSelectPart}
-        onMeasurePoint={(point) => {
-          setMeasurement((current) => addDistancePoint(current, point))
+        onMeasurePoint={(sample) => {
+          setMeasurement((current) => {
+            const restart = current.distance.points.length >= 2
+            return {
+              distance: addDistancePoint(current.distance, sample.point),
+              faces: restart ? [sample] : [...current.faces, sample],
+            }
+          })
         }}
       />
       <DistanceAnnotation
-        points={measurement.points}
-        onReset={() => setMeasurement(emptyDistanceMeasurement)}
+        points={measurement.distance.points}
+        faces={measurement.faces}
+        onReset={() => setMeasurement({ distance: emptyDistanceMeasurement, faces: [] })}
       />
     </>
   )
