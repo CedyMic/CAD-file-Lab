@@ -8,6 +8,7 @@ import {
   getDistanceMillimetres,
   pointToPointDistance,
   parallelFaceDistance,
+  faceAngleDegrees,
 } from '../src/viewer/measurement.ts'
 
 test('calculates a three-dimensional point-to-point distance', () => {
@@ -26,6 +27,17 @@ test('does not report a face gap for nonparallel faces', () => {
     { point: [0, 0, 0], normal: [0, 0, 1] },
     { point: [0, 5, 0], normal: [0, 1, 0] },
   ), null)
+})
+
+test('measures the acute angle between face planes', () => {
+  assert.equal(faceAngleDegrees(
+    { point: [0, 0, 0], normal: [0, 0, 1] },
+    { point: [0, 0, 0], normal: [0, 1, 0] },
+  ), 90)
+  assert.ok(Math.abs(faceAngleDegrees(
+    { point: [0, 0, 0], normal: [1, 0, 0] },
+    { point: [0, 0, 0], normal: [1, 1, 0] },
+  ) - 45) < 1e-10)
 })
 
 test('selects two points and starts a fresh measurement on the third', () => {

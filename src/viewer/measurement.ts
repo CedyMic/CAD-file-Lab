@@ -85,3 +85,15 @@ export function parallelFaceDistance(
     (second.point[2] - first.point[2]) * normalA[2],
   )
 }
+
+export function faceAngleDegrees(first: FaceSample, second: FaceSample): number {
+  const lengthA = Math.hypot(...first.normal)
+  const lengthB = Math.hypot(...second.normal)
+  if (lengthA === 0 || lengthB === 0) throw new Error('Face normals must have a direction.')
+  const dot = (
+    first.normal[0] * second.normal[0] +
+    first.normal[1] * second.normal[1] +
+    first.normal[2] * second.normal[2]
+  ) / (lengthA * lengthB)
+  return Math.acos(Math.min(1, Math.max(-1, Math.abs(dot)))) * 180 / Math.PI
+}

@@ -35,6 +35,7 @@ import {
 import {
   addDistancePoint,
   emptyDistanceMeasurement,
+  faceAngleDegrees,
   formatDistanceMillimetres,
   getDistanceMillimetres,
   parallelFaceDistance,
@@ -471,6 +472,9 @@ function DistanceAnnotation({
   const faceDistance = faces.length === 2
     ? parallelFaceDistance(faces[0], faces[1])
     : null
+  const faceAngle = faces.length === 2
+    ? faceAngleDegrees(faces[0], faces[1])
+    : null
   const labelPosition = second
     ? first.clone().add(second).multiplyScalar(0.5)
     : first
@@ -500,7 +504,9 @@ function DistanceAnnotation({
           {distance === null ? 'Select second point' : `Points ${formatDistanceMillimetres(distance)}`}
           {distance !== null && (
             <span style={{ marginLeft: 7, color: faceDistance === null ? '#f0c68c' : '#9de0b4' }}>
-              {faceDistance === null ? 'Faces not parallel' : `Face gap ${formatDistanceMillimetres(faceDistance)}`}
+              {faceDistance === null
+                ? `Face angle ${faceAngle?.toFixed(1)}°`
+                : `Face gap ${formatDistanceMillimetres(faceDistance)}`}
             </span>
           )}
           <button type="button" onClick={onReset} aria-label="Clear measurement" style={{ background: 'transparent', border: 0, color: '#9dc8df', cursor: 'pointer', marginLeft: 7, padding: 0 }}>×</button>
