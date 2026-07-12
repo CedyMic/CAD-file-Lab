@@ -314,6 +314,42 @@ textarea:focus-visible {
   margin-top: 0;
 }
 
+.sidebar-ad-slot {
+  min-height: 250px;
+  margin-top: 14px;
+  padding: 12px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  color: #7a8996;
+  text-align: center;
+  background: #f7f8f9;
+  border: 1px dashed #bdc8d1;
+  border-radius: 8px;
+}
+
+.sidebar-ad-slot > span {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sidebar-ad-slot > div {
+  display: grid;
+  gap: 4px;
+}
+
+.sidebar-ad-slot strong {
+  color: #657684;
+  font-size: 11px;
+}
+
+.sidebar-ad-slot small {
+  font-size: 9px;
+}
+
 .properties-sidebar {
   min-width: 0;
   overflow-y: auto;
@@ -1287,6 +1323,10 @@ textarea:focus-visible {
   }
 
   .site-footer-privacy {
+    display: none;
+  }
+
+  .sidebar-ad-slot {
     display: none;
   }
 }

@@ -7,6 +7,8 @@ import {
 
 import './App.css'
 
+import { LandingPage } from './marketing/LandingPage'
+
 import {
   disposeCadBody,
   importStepFile,
@@ -937,6 +939,10 @@ function App() {
     return 'No local recovery yet'
   }
 
+  if (window.location.pathname !== '/workspace') {
+    return <LandingPage />
+  }
+
   return (
     <main className="app-shell">
       <a className="skip-link" href="#workspace">
@@ -1107,6 +1113,14 @@ function App() {
               <p>Open a 3D file to inspect its bodies and structure.</p>
             )}
           </section>
+
+          <aside className="sidebar-ad-slot" aria-label="Advertisement">
+            <span>Advertisement</span>
+            <div>
+              <strong>Contextual sponsor space</strong>
+              <small>No model data is shared.</small>
+            </div>
+          </aside>
 
           <section className="project-panel">
             <div>
