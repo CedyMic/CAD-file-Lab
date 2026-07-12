@@ -1,10 +1,25 @@
-import { useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
+
 import './App.css'
 
 import {
   importStepFile,
+  restoreCadProject,
+  serializeCadProject,
   type ImportedCadBody,
 } from './cad/cadClient'
+
+import {
+  getLatestRecovery,
+  requestPersistentStorage,
+  saveRecovery,
+  type CadRecoveryRecord,
+} from './storage/recoveryStore'
 
 import {
   CadViewport,
@@ -25,6 +40,9 @@ type WorkspaceTool =
   | 'modify'
   | 'export'
 
+const AUTOSAVE_INTERVAL =
+  5 * 60 * 1000
+
 const tools: Array<{
   id: WorkspaceTool
   label: string
@@ -33,31 +51,38 @@ const tools: Array<{
   {
     id: 'view',
     label: 'View',
-    description: 'Orbit, pan, zoom and inspect the model',
+    description:
+      'Orbit, pan, zoom and inspect the model',
   },
   {
     id: 'measure',
     label: 'Measure',
-    description: 'Measure vertices, edges, faces and angles',
+    description:
+      'Measure vertices, edges, faces and angles',
   },
   {
     id: 'section',
     label: 'Section',
-    description: 'Preview or permanently cut the model',
+    description:
+      'Preview or permanently cut the model',
   },
   {
     id: 'modify',
     label: 'Modify',
-    description: 'Fillet, chamfer and edit selected geometry',
+    description:
+      'Fillet, chamfer and edit selected geometry',
   },
   {
     id: 'export',
     label: 'Export',
-    description: 'Save the project or export a CAD file',
+    description:
+      'Save the project or export a CAD file',
   },
 ]
 
-function getExtension(fileName: string): string {
+function getExtension(
+  fileName: string,
+): string {
   return (
     fileName
       .split('.')
@@ -67,11 +92,23 @@ function getExtension(fileName: string): string {
   )
 }
 
+function formatRecoveryTime(
+  timestamp: number,
+): string {
+  return new Date(
+    timestamp,
+  ).toLocaleString()
+}
+
 function App() {
   const fileInputRef =
     useRef<HTMLInputElement>(null)
 
-  const commandIdRef = useRef(0)
+  const commandIdRef =
+    useRef(0)
+
+  const recoverySaveInProgressRef =
+    useRef(false)
 
   const [activeTool, setActiveTool] =
     useState<WorkspaceTool>('view')
@@ -80,10 +117,17 @@ function App() {
     useState<string | null>(null)
 
   const [model, setModel] =
-    useState<ImportedCadBody | null>(null)
+    useState<ImportedCadBody | null>(
+      null,
+    )
 
   const [isLoading, setIsLoading] =
     useState(false)
+
+  const [
+    isSavingRecovery,
+    setIsSavingRecovery,
+  ] = useState(false)
 
   const [status, setStatus] =
     useState('Ready')
@@ -91,7 +135,10 @@ function App() {
   const [error, setError] =
     useState<string | null>(null)
 
-  const [displaySettings, setDisplaySettings] =
+  const [
+    displaySettings,
+    setDisplaySettings,
+  ] =
     useState<DisplaySettings>(
       defaultDisplaySettings,
     )
@@ -101,12 +148,38 @@ function App() {
     setShowVisualSettings,
   ] = useState(false)
 
-  const [viewCommand, setViewCommand] =
-    useState<ViewCommand | null>(null)
+  const [
+    viewCommand,
+    setViewCommand,
+  ] =
+    useState<ViewCommand | null>(
+      null,
+    )
+
+  const [
+    latestRecovery,
+    setLatestRecovery,
+  ] =
+    useState<CadRecoveryRecord | null>(
+      null,
+    )
+
+  const [
+    lastRecoverySavedAt,
+    setLastRecoverySavedAt,
+  ] =
+    useState<number | null>(null)
+
+  const [
+    storageIsPersistent,
+    setStorageIsPersistent,
+  ] =
+    useState<boolean | null>(null)
 
   const selectedTool =
     tools.find(
-      (tool) => tool.id === activeTool,
+      (tool) =>
+        tool.id === activeTool,
     ) ?? tools[0]
 
   function openFilePicker() {
@@ -122,6 +195,165 @@ function App() {
       id: commandIdRef.current,
       type,
     })
+  }
+
+  const refreshLatestRecovery =
+    useCallback(async () => {
+      try {
+        const recovery =
+          await getLatestRecovery()
+
+        setLatestRecovery(
+          recovery ?? null,
+        )
+      } catch {
+        setLatestRecovery(null)
+      }
+    }, [])
+
+  useEffect(() => {
+    void (async () => {
+      const isPersistent =
+        await requestPersistentStorage()
+
+      setStorageIsPersistent(
+        isPersistent,
+      )
+
+      await refreshLatestRecovery()
+    })()
+  }, [refreshLatestRecovery])
+
+  const saveCurrentRecovery =
+    useCallback(async () => {
+      if (
+        !model ||
+        recoverySaveInProgressRef.current
+      ) {
+        return
+      }
+
+      recoverySaveInProgressRef.current =
+        true
+
+      setIsSavingRecovery(true)
+
+      try {
+        const project =
+          await serializeCadProject(
+            model.bodyId,
+          )
+
+        const recovery =
+          await saveRecovery(
+            project,
+            displaySettings,
+          )
+
+        setLatestRecovery(recovery)
+
+        setLastRecoverySavedAt(
+          recovery.updatedAt,
+        )
+
+        setStatus(
+          `Recovery saved locally at ${new Date(
+            recovery.updatedAt,
+          ).toLocaleTimeString()}`,
+        )
+      } catch (
+        caughtError
+      ) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : 'Local recovery could not be saved.'
+
+        setError(message)
+
+        setStatus(
+          'Recovery save failed',
+        )
+      } finally {
+        recoverySaveInProgressRef.current =
+          false
+
+        setIsSavingRecovery(false)
+      }
+    }, [
+      displaySettings,
+      model,
+    ])
+
+  useEffect(() => {
+    if (!model) {
+      return
+    }
+
+    const autosaveTimer =
+      window.setInterval(() => {
+        void saveCurrentRecovery()
+      }, AUTOSAVE_INTERVAL)
+
+    function handleVisibilityChange() {
+      if (
+        document.visibilityState ===
+        'hidden'
+      ) {
+        void saveCurrentRecovery()
+      }
+    }
+
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange,
+    )
+
+    return () => {
+      window.clearInterval(
+        autosaveTimer,
+      )
+
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange,
+      )
+    }
+  }, [
+    model,
+    saveCurrentRecovery,
+  ])
+
+  async function saveImportedModelRecovery(
+    importedModel: ImportedCadBody,
+  ): Promise<void> {
+    try {
+      const project =
+        await serializeCadProject(
+          importedModel.bodyId,
+        )
+
+      const recovery =
+        await saveRecovery(
+          project,
+          displaySettings,
+        )
+
+      setLatestRecovery(recovery)
+
+      setLastRecoverySavedAt(
+        recovery.updatedAt,
+      )
+    } catch (
+      caughtError
+    ) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : 'The initial recovery could not be saved.'
+
+      setError(message)
+    }
   }
 
   async function handleFile(
@@ -142,12 +374,16 @@ function App() {
         'This editable version currently supports STEP and STP files.',
       )
 
-      setStatus('Unsupported file format')
+      setStatus(
+        'Unsupported file format',
+      )
+
       return
     }
 
     setIsLoading(true)
     setError(null)
+
     setStatus(
       `Importing ${file.name} locally…`,
     )
@@ -157,25 +393,120 @@ function App() {
         await importStepFile(file)
 
       setModel(importedModel)
-      setFileName(file.name)
+
+      setFileName(
+        importedModel.fileName,
+      )
+
       setStatus(
-        `${file.name} loaded successfully`,
+        `${importedModel.fileName} loaded successfully`,
+      )
+
+      await saveImportedModelRecovery(
+        importedModel,
       )
 
       window.setTimeout(() => {
         sendViewCommand('fit')
       }, 100)
-    } catch (caughtError) {
+    } catch (
+      caughtError
+    ) {
       const message =
         caughtError instanceof Error
           ? caughtError.message
           : 'The STEP file could not be imported.'
 
       setError(message)
+
       setStatus('Import failed')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  async function recoverLatestProject():
+    Promise<void> {
+    if (!latestRecovery) {
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    setStatus(
+      `Recovering ${latestRecovery.project.fileName}…`,
+    )
+
+    try {
+      const recoveredModel =
+        await restoreCadProject(
+          latestRecovery.project,
+        )
+
+      setModel(recoveredModel)
+
+      setFileName(
+        recoveredModel.fileName,
+      )
+
+      setDisplaySettings({
+        ...latestRecovery
+          .displaySettings,
+      })
+
+      setLastRecoverySavedAt(
+        latestRecovery.updatedAt,
+      )
+
+      setStatus(
+        `${recoveredModel.fileName} recovered locally`,
+      )
+
+      window.setTimeout(() => {
+        sendViewCommand('fit')
+      }, 100)
+    } catch (
+      caughtError
+    ) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : 'The local project could not be recovered.'
+
+      setError(message)
+
+      setStatus(
+        'Recovery failed',
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  function getRecoveryStatus():
+    string {
+    if (isSavingRecovery) {
+      return 'Saving local recovery…'
+    }
+
+    if (lastRecoverySavedAt) {
+      return `Recovery saved ${formatRecoveryTime(
+        lastRecoverySavedAt,
+      )}`
+    }
+
+    if (model) {
+      return 'Recovery save pending'
+    }
+
+    if (latestRecovery) {
+      return `Recovery available from ${formatRecoveryTime(
+        latestRecovery.updatedAt,
+      )}`
+    }
+
+    return 'No local recovery yet'
   }
 
   return (
@@ -209,7 +540,7 @@ function App() {
             onClick={openFilePicker}
           >
             {isLoading
-              ? 'Importing…'
+              ? 'Working…'
               : 'Open STEP file'}
           </button>
 
@@ -247,28 +578,35 @@ function App() {
             className="tool-navigation"
             aria-label="CAD workspace tools"
           >
-            {tools.map((tool) => (
-              <button
-                key={tool.id}
-                className={
-                  activeTool === tool.id
-                    ? 'tool-button active'
-                    : 'tool-button'
-                }
-                type="button"
-                onClick={() => {
-                  setActiveTool(tool.id)
-                }}
-              >
-                <strong>
-                  {tool.label}
-                </strong>
+            {tools.map(
+              (tool) => (
+                <button
+                  key={tool.id}
+                  className={
+                    activeTool ===
+                    tool.id
+                      ? 'tool-button active'
+                      : 'tool-button'
+                  }
+                  type="button"
+                  onClick={() => {
+                    setActiveTool(
+                      tool.id,
+                    )
+                  }}
+                >
+                  <strong>
+                    {tool.label}
+                  </strong>
 
-                <span>
-                  {tool.description}
-                </span>
-              </button>
-            ))}
+                  <span>
+                    {
+                      tool.description
+                    }
+                  </span>
+                </button>
+              ),
+            )}
           </nav>
 
           <section className="project-panel">
@@ -278,13 +616,56 @@ function App() {
               </span>
 
               <strong>
-                {fileName ?? 'No file opened'}
+                {fileName ??
+                  'No file opened'}
               </strong>
             </div>
 
             <span className="autosave-status">
-              Recovery autosave will be added next
+              {getRecoveryStatus()}
             </span>
+
+            <span className="autosave-status">
+              {storageIsPersistent ===
+              true
+                ? 'Protected browser storage enabled'
+                : 'Stored locally in this browser'}
+            </span>
+
+            {model && (
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={
+                  isSavingRecovery
+                }
+                onClick={() => {
+                  void saveCurrentRecovery()
+                }}
+              >
+                Save recovery now
+              </button>
+            )}
+
+            {!model &&
+              latestRecovery && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={
+                    isLoading
+                  }
+                  onClick={() => {
+                    void recoverLatestProject()
+                  }}
+                >
+                  Recover{' '}
+                  {
+                    latestRecovery
+                      .project.fileName
+                  }
+                </button>
+              )}
 
             {error && (
               <span
@@ -305,7 +686,9 @@ function App() {
               </strong>
 
               <span>
-                {selectedTool.description}
+                {
+                  selectedTool.description
+                }
               </span>
             </div>
 
@@ -319,7 +702,8 @@ function App() {
                 }
                 onClick={() => {
                   setShowVisualSettings(
-                    (current) => !current,
+                    (current) =>
+                      !current,
                   )
                 }}
               >
@@ -330,7 +714,9 @@ function App() {
                 type="button"
                 className="toolbar-button"
                 onClick={() => {
-                  sendViewCommand('fit')
+                  sendViewCommand(
+                    'fit',
+                  )
                 }}
               >
                 Fit
@@ -361,39 +747,54 @@ function App() {
               event.preventDefault()
 
               void handleFile(
-                event.dataTransfer.files?.[0],
+                event.dataTransfer
+                  .files?.[0],
               )
             }}
           >
             <CadViewport
               model={model}
-              settings={displaySettings}
-              viewCommand={viewCommand}
+              settings={
+                displaySettings
+              }
+              viewCommand={
+                viewCommand
+              }
             />
 
             <div className="viewer-hint">
               <strong>
                 {isLoading
-                  ? 'Importing STEP model…'
-                  : fileName ?? 'Test model'}
+                  ? 'Processing CAD model…'
+                  : fileName ??
+                    'Test model'}
               </strong>
 
               <span>
-                Drag to orbit · Scroll to zoom ·
-                Right-drag to pan
+                Drag to orbit · Scroll
+                to zoom · Right-drag
+                to pan
               </span>
             </div>
 
             {showVisualSettings && (
               <div className="display-panel-overlay">
                 <DisplayPanel
-                  settings={displaySettings}
-                  onChange={setDisplaySettings}
+                  settings={
+                    displaySettings
+                  }
+                  onChange={
+                    setDisplaySettings
+                  }
                   onFitView={() => {
-                    sendViewCommand('fit')
+                    sendViewCommand(
+                      'fit',
+                    )
                   }}
                   onResetView={() => {
-                    sendViewCommand('isometric')
+                    sendViewCommand(
+                      'isometric',
+                    )
                   }}
                 />
               </div>
@@ -410,7 +811,7 @@ function App() {
             </span>
 
             <span>
-              No cloud upload
+              Autosave every 5 minutes
             </span>
           </footer>
         </section>
