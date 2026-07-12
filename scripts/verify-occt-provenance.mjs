@@ -27,6 +27,7 @@ const releaseDocuments = await Promise.all([
   'licenses/OCCT-LGPL-EXCEPTION-1.0.txt',
   'PRIVACY_NOTICE.txt',
   'TERMS_OF_USE.txt',
+  'IMPRINT.txt',
 ].map((file) => readFile(path.join(root, 'public', file), 'utf8')))
 const actualSha256 = createHash('sha256').update(wasm).digest('hex')
 
