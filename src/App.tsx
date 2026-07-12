@@ -1040,8 +1040,12 @@ function App() {
               disabled={!model?.editable || !localRecoveryEnabled || isLoading || isSavingRecovery}
               title="Save the current work immediately in private browser storage"
             >
-              <strong>Save</strong><span>Protect current work</span>
+              <strong>Save</strong><span>Save now</span>
             </button>
+            <span className="autosave-indicator" title="Editable work is saved privately in this browser every five minutes">
+              <i aria-hidden="true" />
+              Auto-saves every 5 min
+            </span>
           </div>
         </div>
 
@@ -1404,9 +1408,7 @@ function App() {
               Local processing
             </span>
 
-            <span>
-              Autosave every 5 minutes
-            </span>
+            <span>Private local recovery</span>
           </footer>
         </section>
 

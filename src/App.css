@@ -135,6 +135,26 @@ textarea:focus-visible {
   font-size: 9px;
 }
 
+.autosave-indicator {
+  max-width: 92px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #3f6e56;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.autosave-indicator i {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  background: #2ca568;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgb(44 165 104 / 12%);
+}
+
 .toolbar-icon {
   width: 21px;
   height: 21px;
