@@ -340,6 +340,24 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       if (!Number.isFinite(length) || length <= 0 || current <= 0) return
       dispatchSketch({ type: 'updateEntity', entity: { ...entity, end: [entity.start[0] + (entity.end[0] - entity.start[0]) * length / current, entity.start[1] + (entity.end[1] - entity.start[1]) * length / current] } })
     }
+    const selectedLines = sketchState.document.entities.filter((entity): entity is Extract<SketchEntity, { type: 'line' }> => entity.type === 'line' && sketchState.selectedEntityIds.includes(entity.id))
+    const applySingleLineRelation = (type: 'horizontal' | 'vertical') => {
+      const line = selectedLines[0]
+      if (!line) return
+      dispatchSketch({ type: 'updateEntity', entity: { ...line, end: type === 'horizontal' ? [line.end[0], line.start[1]] : [line.start[0], line.end[1]] } })
+      dispatchSketch({ type: 'addConstraint', constraint: { id: `relation-${crypto.randomUUID()}`, type, entityId: line.id } })
+    }
+    const applyTwoLineRelation = (type: 'parallel' | 'perpendicular' | 'equal') => {
+      const [first, second] = selectedLines
+      if (!first || !second) return
+      const firstVector: [number, number] = [first.end[0] - first.start[0], first.end[1] - first.start[1]]
+      const firstLength = Math.hypot(...firstVector); const secondLength = Math.hypot(second.end[0] - second.start[0], second.end[1] - second.start[1])
+      if (!firstLength || !secondLength) return
+      const targetLength = type === 'equal' ? firstLength : secondLength
+      const direction: [number, number] = type === 'perpendicular' ? [-firstVector[1] / firstLength, firstVector[0] / firstLength] : [firstVector[0] / firstLength, firstVector[1] / firstLength]
+      dispatchSketch({ type: 'updateEntity', entity: { ...second, end: [second.start[0] + direction[0] * targetLength, second.start[1] + direction[1] * targetLength] } })
+      dispatchSketch({ type: 'addConstraint', constraint: { id: `relation-${crypto.randomUUID()}`, type, firstEntityId: first.id, secondEntityId: second.id } })
+    }
     return <section className="sketch-workflow">
       <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
       <div className="cad-command-tabs"><button className="selected" type="button">Sketch</button><button type="button" disabled>Features</button></div>
@@ -354,6 +372,11 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
         <button className={tool === 'arc' ? 'selected' : ''} type="button" onClick={() => { setTool('arc'); setArcPoints([]); setDrag(null) }}>⌒ Centerpoint Arc</button>
         <button className={tool === 'dimension' ? 'selected' : ''} type="button" onClick={() => setTool('dimension')}>↔ Smart Dimension</button>
         <button type="button" disabled>Trim</button><button type="button" disabled>Offset entities</button><button type="button" disabled>Mirror entities</button>
+        <button type="button" disabled={selectedLines.length !== 1} onClick={() => applySingleLineRelation('horizontal')}>— Horizontal</button>
+        <button type="button" disabled={selectedLines.length !== 1} onClick={() => applySingleLineRelation('vertical')}>│ Vertical</button>
+        <button type="button" disabled={selectedLines.length !== 2} onClick={() => applyTwoLineRelation('parallel')}>∥ Parallel</button>
+        <button type="button" disabled={selectedLines.length !== 2} onClick={() => applyTwoLineRelation('perpendicular')}>⊥ Perpendicular</button>
+        <button type="button" disabled={selectedLines.length !== 2} onClick={() => applyTwoLineRelation('equal')}>= Equal</button>
       </div>
       <svg ref={canvasRef} className="sketch-canvas" viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
         onPointerDown={(event) => {
@@ -412,6 +435,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
           <label><span>Diameter (mm)</span><input type="number" min="0.02" step="0.01" value={(selectedSketchEntity.radius * 2).toFixed(2)} onChange={(event) => dispatchSketch({ type: 'updateEntity', entity: { ...selectedSketchEntity, radius: Math.max(0.01, Number(event.target.value) / 2) } })} /></label>
         </>}
         <label className="inline-check"><input type="checkbox" checked={selectedSketchEntity.construction === true} onChange={(event) => dispatchSketch({ type: 'updateEntity', entity: { ...selectedSketchEntity, construction: event.target.checked } })} /><span>For construction</span></label>
+        {sketchState.document.constraints.some((constraint) => ('entityId' in constraint ? constraint.entityId === selectedSketchEntity.id : constraint.firstEntityId === selectedSketchEntity.id || constraint.secondEntityId === selectedSketchEntity.id)) && <div className="sketch-relation-list"><span>Existing relations</span>{sketchState.document.constraints.filter((constraint) => ('entityId' in constraint ? constraint.entityId === selectedSketchEntity.id : constraint.firstEntityId === selectedSketchEntity.id || constraint.secondEntityId === selectedSketchEntity.id)).map((constraint) => <strong key={constraint.id}>{constraint.type}</strong>)}</div>}
         <button type="button" onClick={() => dispatchSketch({ type: 'removeEntities', entityIds: [selectedSketchEntity.id] })}>Delete entity</button>
       </aside>}
       <small>{tool === 'line' ? 'Click endpoints. Click the first red point to close the profile.' : 'Click and drag in the sketch. Dimensions are displayed on the sketch.'}</small>
