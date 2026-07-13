@@ -1647,6 +1647,13 @@ textarea:focus-visible {
 .viewport-placeholder.sketch-mode .dimension-grid { max-width: 520px; }
 .viewport-placeholder.sketch-mode .reference-plane-editor { grid-template-columns: repeat(3, minmax(120px, 190px)); align-items: end; max-width: 620px; gap: 6px; padding: 6px 8px; }
 .viewport-placeholder.sketch-mode .reference-plane-editor small { grid-column: 1 / -1; }
+.viewport-placeholder.sketch-mode > .sketch-workflow.plane-stage { inset: 14px auto auto 14px; display: flex; width: min(560px, calc(100% - 28px)); height: auto; max-height: calc(100% - 28px); padding: 10px; gap: 7px; overflow-y: auto; background: #f5f8fa; border: 1px solid #9eb1c0; border-radius: 6px; box-shadow: 0 8px 24px rgba(28, 43, 56, .18); }
+.viewport-placeholder.sketch-mode .plane-stage > .panel-label { font-size: 10px; }
+.viewport-placeholder.sketch-mode .plane-stage > p { font-size: 10px; }
+.viewport-placeholder.sketch-mode .plane-stage > button { align-self: flex-start; width: auto; min-height: 30px; padding: 5px 12px; }
+.viewport-placeholder.sketch-mode .plane-stage > .primary-button { align-self: flex-end; min-width: 110px; }
+.viewport-placeholder.sketch-mode .plane-stage .plane-picker { width: 100%; max-width: none; }
+.viewport-placeholder.sketch-mode .plane-stage .reference-plane-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: none; }
 .sketch-dimension { fill: #075f9f; font-size: 8px; font-weight: 700; paint-order: stroke; stroke: white; stroke-width: 2px; }
 .sketch-segment-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 5px; max-width: 620px; color: #334e63; font-size: 11px; }
 .cad-command-tabs { display: flex; gap: 2px; border-bottom: 1px solid #9eb1c0; }

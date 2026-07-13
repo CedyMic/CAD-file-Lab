@@ -276,7 +276,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       : { type: 'circle', radius: Math.max(0.5, Math.round(Math.hypot(dx, dy) * 10) / 10) } })
     setDrag({ start: drag.start, end })
   }
-  if (stage === 'plane') return <section className="sketch-workflow">
+  if (stage === 'plane') return <section className="sketch-workflow plane-stage">
     <span className="panel-label">New part · Select sketch plane</span>
     <p>Choose a plane, then draw the first sketch with the mouse.</p>
     <div className="plane-picker">
