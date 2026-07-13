@@ -211,13 +211,38 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
   const [planeAngle, setPlaneAngle] = useState(0)
   const [planeAngleAxis, setPlaneAngleAxis] = useState<'horizontal' | 'vertical'>('horizontal')
   const [creatingPlane, setCreatingPlane] = useState(false)
-  const [tool, setTool] = useState<'line' | 'rectangle' | 'circle' | 'centerline' | 'arc' | 'dimension'>('line')
+  const [tool, setTool] = useState<'select' | 'line' | 'rectangle' | 'circle' | 'centerline' | 'arc' | 'dimension'>('line')
   const [drag, setDrag] = useState<{ start: [number, number]; end: [number, number] } | null>(null)
   const [linePoints, setLinePoints] = useState<Array<[number, number]>>([])
+  const [hoverPoint, setHoverPoint] = useState<[number, number] | null>(null)
+  const [canvasSize, setCanvasSize] = useState({ width: 900, height: 520 })
+  const canvasRef = useRef<SVGSVGElement>(null)
   const feature = model.features.at(-1)!
   const replaceFeature = (next: SketchExtrudeFeature) => onChange({
     version: 1, features: model.features.map((item, index) => index === model.features.length - 1 ? next : item),
   })
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const updateSize = () => {
+      const box = canvas.getBoundingClientRect()
+      setCanvasSize({ width: Math.max(320, Math.round(box.width)), height: Math.max(240, Math.round(box.height)) })
+    }
+    updateSize()
+    const observer = new ResizeObserver(updateSize)
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [stage])
+  useEffect(() => {
+    const stopLine = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && stage === 'sketch' && tool === 'line') {
+        setTool('select')
+        setHoverPoint(null)
+      }
+    }
+    window.addEventListener('keydown', stopLine)
+    return () => window.removeEventListener('keydown', stopLine)
+  }, [stage, tool])
   const startSketch = () => {
     const next: SketchExtrudeFeature = {
       id: `feature-${crypto.randomUUID()}`, type: 'sketchExtrude', name: 'Boss-Extrude1', plane, planeOffset, planeAngle, planeAngleAxis,
@@ -229,8 +254,19 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     setStage('sketch')
   }
   const point = (event: ReactPointerEvent<SVGSVGElement>): [number, number] => {
-    const box = event.currentTarget.getBoundingClientRect()
-    return [(event.clientX - box.left) * 320 / box.width, (event.clientY - box.top) * 240 / box.height]
+    const matrix = event.currentTarget.getScreenCTM()
+    if (!matrix) return [0, 0]
+    const local = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
+    return [local.x, local.y]
+  }
+  const snappedLinePoint = (raw: [number, number]): [number, number] => {
+    const endpoint = linePoints.find((candidate) => Math.hypot(raw[0] - candidate[0], raw[1] - candidate[1]) <= 10)
+    if (endpoint) return endpoint
+    const previous = linePoints.at(-1)
+    if (!previous) return raw
+    if (Math.abs(raw[0] - previous[0]) <= 7) return [previous[0], raw[1]]
+    if (Math.abs(raw[1] - previous[1]) <= 7) return [raw[0], previous[1]]
+    return raw
   }
   const finish = (end: [number, number]) => {
     if (!drag) return
@@ -259,7 +295,8 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     <button className="primary-button" type="button" onClick={startSketch}>Start sketch</button>
   </section>
   if (stage === 'sketch') {
-    const preview = drag ?? { start: [110, 85] as [number, number], end: tool === 'rectangle' ? [210, 155] as [number, number] : [170, 85] as [number, number] }
+    const origin: [number, number] = [canvasSize.width / 2, canvasSize.height / 2]
+    const preview = drag ?? { start: [origin[0] - 50, origin[1] - 35] as [number, number], end: tool === 'rectangle' ? [origin[0] + 50, origin[1] + 35] as [number, number] : [origin[0] + 10, origin[1] - 35] as [number, number] }
     const dx = Math.abs(preview.end[0] - preview.start[0]); const dy = Math.abs(preview.end[1] - preview.start[1])
     return <section className="sketch-workflow">
       <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
@@ -273,24 +310,32 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
         <button className={tool === 'dimension' ? 'selected' : ''} type="button" disabled title="Dimensions are currently shown automatically">↔ Smart Dimension</button>
         <button type="button" disabled>Trim</button><button type="button" disabled>Offset entities</button><button type="button" disabled>Mirror entities</button>
       </div>
-      <svg className="sketch-canvas" viewBox="0 0 320 240"
+      <svg ref={canvasRef} className="sketch-canvas" viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
         onPointerDown={(event) => {
-          const start = point(event)
+          const start = tool === 'line' ? snappedLinePoint(point(event)) : point(event)
           if (tool === 'line') {
             if (linePoints.length >= 3 && Math.hypot(start[0] - linePoints[0][0], start[1] - linePoints[0][1]) < 8) {
-              replaceFeature({ ...feature, plane, profile: { type: 'polyline', points: linePoints.map(([x, y]) => [Math.round(x - 160), Math.round(120 - y)]) } })
+              replaceFeature({ ...feature, plane, profile: { type: 'polyline', points: linePoints.map(([x, y]) => [Math.round((x - origin[0]) * 10) / 10, Math.round((origin[1] - y) * 10) / 10]) } })
               setDrag({ start: linePoints[0], end: linePoints[0] })
-            } else setLinePoints((current) => [...current, start])
+              setTool('select')
+              setHoverPoint(null)
+            } else {
+              setLinePoints((current) => [...current, start])
+              setHoverPoint(start)
+            }
             return
           }
           if (tool !== 'rectangle' && tool !== 'circle') return
           event.currentTarget.setPointerCapture(event.pointerId); setDrag({ start, end: start })
         }}
-        onPointerMove={(event) => { if ((tool === 'rectangle' || tool === 'circle') && drag && event.currentTarget.hasPointerCapture(event.pointerId)) setDrag({ ...drag, end: point(event) }) }}
+        onPointerMove={(event) => {
+          if (tool === 'line' && linePoints.length) setHoverPoint(snappedLinePoint(point(event)))
+          if ((tool === 'rectangle' || tool === 'circle') && drag && event.currentTarget.hasPointerCapture(event.pointerId)) setDrag({ ...drag, end: point(event) })
+        }}
         onPointerUp={(event) => { if ((tool === 'rectangle' || tool === 'circle') && event.currentTarget.hasPointerCapture(event.pointerId)) { finish(point(event)); event.currentTarget.releasePointerCapture(event.pointerId) } }}>
         <defs><pattern id="sketch-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#d5e1eb" strokeWidth=".6" /></pattern></defs>
-        <rect width="320" height="240" fill="url(#sketch-grid)" /><path d="M160 0V240M0 120H320" stroke="#789dbb" /><circle cx="160" cy="120" r="3" fill="#d33" />
-        {tool === 'line' ? <>{linePoints.length > 1 && <polyline points={linePoints.map((item) => item.join(',')).join(' ')} fill="none" stroke="#0875c9" strokeWidth="2" />}{linePoints.map((item, index) => <g key={`${item[0]}-${item[1]}-${index}`}><circle cx={item[0]} cy={item[1]} r="3.5" fill={index === 0 ? '#d33' : '#0875c9'} />{index > 0 && <text x={(item[0] + linePoints[index - 1][0]) / 2} y={(item[1] + linePoints[index - 1][1]) / 2 - 5} className="sketch-dimension">{Math.hypot(item[0] - linePoints[index - 1][0], item[1] - linePoints[index - 1][1]).toFixed(1)}</text>}</g>)}</>
+        <rect width={canvasSize.width} height={canvasSize.height} fill="url(#sketch-grid)" /><path d={`M${origin[0]} 0V${canvasSize.height}M0 ${origin[1]}H${canvasSize.width}`} stroke="#789dbb" /><circle cx={origin[0]} cy={origin[1]} r="3" fill="#d33" />
+        {(tool === 'line' || linePoints.length > 0) ? <>{linePoints.length > 1 && <polyline points={linePoints.map((item) => item.join(',')).join(' ')} fill="none" stroke="#0875c9" strokeWidth="2" />}{tool === 'line' && linePoints.length > 0 && hoverPoint && <line x1={linePoints.at(-1)![0]} y1={linePoints.at(-1)![1]} x2={hoverPoint[0]} y2={hoverPoint[1]} stroke="#1595e6" strokeWidth="2" strokeDasharray="5 3" />}{linePoints.map((item, index) => <g key={`${item[0]}-${item[1]}-${index}`}><circle cx={item[0]} cy={item[1]} r="4.5" fill={index === 0 ? '#d33' : '#0875c9'} />{index > 0 && <text x={(item[0] + linePoints[index - 1][0]) / 2} y={(item[1] + linePoints[index - 1][1]) / 2 - 7} className="sketch-dimension">{Math.hypot(item[0] - linePoints[index - 1][0], item[1] - linePoints[index - 1][1]).toFixed(1)} mm</text>}</g>)}</>
           : tool === 'rectangle'
           ? <rect x={Math.min(preview.start[0], preview.end[0])} y={Math.min(preview.start[1], preview.end[1])} width={dx} height={dy} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />
           : <circle cx={preview.start[0]} cy={preview.start[1]} r={Math.hypot(dx, dy)} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />}
@@ -1763,6 +1808,20 @@ function App() {
               </button>
             </div>
           </div>
+
+          {activeTool === 'measure' && <nav className="measure-commandbar" aria-label="Measure commands">
+            <div><span>Selection filter</span>
+              <button className={measurementMode === 'auto' ? 'selected' : ''} type="button" onClick={() => setMeasurementMode('auto')}>Auto</button>
+              <button className={measurementMode === 'point' ? 'selected' : ''} type="button" onClick={() => setMeasurementMode('point')}>Point</button>
+              <button className={measurementMode === 'edge' ? 'selected' : ''} type="button" onClick={() => setMeasurementMode('edge')}>Edge</button>
+              <button className={measurementMode === 'face' ? 'selected' : ''} type="button" onClick={() => setMeasurementMode('face')}>Face</button>
+            </div>
+            <div><span>Results</span>
+              <button type="button" disabled>XYZ</button><button type="button" disabled>Angle</button><button type="button" disabled>Radius / Ø</button>
+              <button type="button" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}>Clear</button>
+            </div>
+            <small>Select one or two entities. Minimum distance and available dimensions update in Properties.</small>
+          </nav>}
 
           <div
             className={`viewport-placeholder ${activeTool === 'create' && createMode === 'features' ? 'sketch-mode' : ''}`}
