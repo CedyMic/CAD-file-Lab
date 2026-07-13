@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -24,6 +25,7 @@ import {
 } from './cad/cadClient'
 import type { CadPrimitive } from './cad/primitive'
 import type { CadFeatureModel, SketchExtrudeFeature } from './cad/featureModel'
+import { createSketchEditorState, reduceSketch, type SketchEntity } from './cad/sketchModel'
 
 import {
   CAD_LAB_PROJECT_EXTENSION,
@@ -217,6 +219,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
   const [hoverPoint, setHoverPoint] = useState<[number, number] | null>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 900, height: 520 })
   const canvasRef = useRef<SVGSVGElement>(null)
+  const [sketchState, dispatchSketch] = useReducer(reduceSketch, undefined, createSketchEditorState)
   const feature = model.features.at(-1)!
   const replaceFeature = (next: SketchExtrudeFeature) => onChange({
     version: 1, features: model.features.map((item, index) => index === model.features.length - 1 ? next : item),
@@ -243,6 +246,21 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     window.addEventListener('keydown', stopLine)
     return () => window.removeEventListener('keydown', stopLine)
   }, [stage, tool])
+  useEffect(() => {
+    const editSketch = (event: KeyboardEvent) => {
+      if (stage !== 'sketch') return
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        dispatchSketch({ type: event.shiftKey ? 'redo' : 'undo' })
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+        event.preventDefault(); dispatchSketch({ type: 'redo' })
+      } else if ((event.key === 'Delete' || event.key === 'Backspace') && sketchState.selectedEntityIds.length) {
+        event.preventDefault(); dispatchSketch({ type: 'removeEntities', entityIds: sketchState.selectedEntityIds })
+      }
+    }
+    window.addEventListener('keydown', editSketch)
+    return () => window.removeEventListener('keydown', editSketch)
+  }, [sketchState.selectedEntityIds, stage])
   const startSketch = () => {
     const next: SketchExtrudeFeature = {
       id: `feature-${crypto.randomUUID()}`, type: 'sketchExtrude', name: 'Boss-Extrude1', plane, planeOffset, planeAngle, planeAngleAxis,
@@ -298,10 +316,18 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     const origin: [number, number] = [canvasSize.width / 2, canvasSize.height / 2]
     const preview = drag ?? { start: [origin[0] - 50, origin[1] - 35] as [number, number], end: tool === 'rectangle' ? [origin[0] + 50, origin[1] + 35] as [number, number] : [origin[0] + 10, origin[1] - 35] as [number, number] }
     const dx = Math.abs(preview.end[0] - preview.start[0]); const dy = Math.abs(preview.end[1] - preview.start[1])
+    const selectedSketchEntity = sketchState.document.entities.find((entity) => sketchState.selectedEntityIds.includes(entity.id))
+    const updateLineLength = (entity: Extract<SketchEntity, { type: 'line' }>, length: number) => {
+      const current = Math.hypot(entity.end[0] - entity.start[0], entity.end[1] - entity.start[1])
+      if (!Number.isFinite(length) || length <= 0 || current <= 0) return
+      dispatchSketch({ type: 'updateEntity', entity: { ...entity, end: [entity.start[0] + (entity.end[0] - entity.start[0]) * length / current, entity.start[1] + (entity.end[1] - entity.start[1]) * length / current] } })
+    }
     return <section className="sketch-workflow">
       <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
       <div className="cad-command-tabs"><button className="selected" type="button">Sketch</button><button type="button" disabled>Features</button></div>
       <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
+        <button type="button" disabled={!sketchState.undoStack.length} onClick={() => dispatchSketch({ type: 'undo' })}>↶ Undo</button>
+        <button type="button" disabled={!sketchState.redoStack.length} onClick={() => dispatchSketch({ type: 'redo' })}>↷ Redo</button>
         <button className={tool === 'line' ? 'selected' : ''} type="button" onClick={() => { setTool('line'); setDrag(null); setLinePoints([]); setHoverPoint(null) }}>╱ Line</button>
         <button className={tool === 'centerline' ? 'selected' : ''} type="button" disabled title="Coming in the next sketch-kernel milestone">┄ Centerline</button>
         <button className={tool === 'rectangle' ? 'selected' : ''} type="button" onClick={() => { setTool('rectangle'); setDrag(null) }}>▭ Rectangle</button>
@@ -315,12 +341,15 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
           const start = tool === 'line' ? snappedLinePoint(point(event)) : point(event)
           if (tool === 'line') {
             if (linePoints.length >= 3 && Math.hypot(start[0] - linePoints[0][0], start[1] - linePoints[0][1]) < 8) {
+              dispatchSketch({ type: 'addEntity', entity: { id: `line-${crypto.randomUUID()}`, type: 'line', start: linePoints.at(-1)!, end: linePoints[0] } })
               replaceFeature({ ...feature, plane, profile: { type: 'polyline', points: linePoints.map(([x, y]) => [Math.round((x - origin[0]) * 10) / 10, Math.round((origin[1] - y) * 10) / 10]) } })
               setLinePoints((current) => [...current, current[0]])
               setDrag({ start: linePoints[0], end: linePoints[0] })
               setTool('select')
               setHoverPoint(null)
             } else {
+              const previous = linePoints.at(-1)
+              if (previous) dispatchSketch({ type: 'addEntity', entity: { id: `line-${crypto.randomUUID()}`, type: 'line', start: previous, end: start } })
               setLinePoints((current) => [...current, start])
               setHoverPoint(start)
             }
@@ -336,6 +365,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
         onPointerUp={(event) => { if ((tool === 'rectangle' || tool === 'circle') && event.currentTarget.hasPointerCapture(event.pointerId)) { finish(point(event)); event.currentTarget.releasePointerCapture(event.pointerId) } }}>
         <defs><pattern id="sketch-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#d5e1eb" strokeWidth=".6" /></pattern></defs>
         <rect width={canvasSize.width} height={canvasSize.height} fill="url(#sketch-grid)" /><path d={`M${origin[0]} 0V${canvasSize.height}M0 ${origin[1]}H${canvasSize.width}`} stroke="#789dbb" /><circle cx={origin[0]} cy={origin[1]} r="3" fill="#d33" />
+        {sketchState.document.entities.map((entity) => entity.type === 'line' && <line key={entity.id} x1={entity.start[0]} y1={entity.start[1]} x2={entity.end[0]} y2={entity.end[1]} className={`sketch-entity${sketchState.selectedEntityIds.includes(entity.id) ? ' selected' : ''}`} onPointerDown={(event) => { if (tool !== 'select') return; event.stopPropagation(); dispatchSketch({ type: 'select', entityId: entity.id, additive: event.ctrlKey || event.metaKey || event.shiftKey }) }} />)}
         {(tool === 'line' || linePoints.length > 0) ? <>{linePoints.length > 1 && <polyline points={linePoints.map((item) => item.join(',')).join(' ')} fill="none" stroke="#0875c9" strokeWidth="2" />}{tool === 'line' && linePoints.length > 0 && hoverPoint && <line x1={linePoints.at(-1)![0]} y1={linePoints.at(-1)![1]} x2={hoverPoint[0]} y2={hoverPoint[1]} stroke="#1595e6" strokeWidth="2" strokeDasharray="5 3" />}{linePoints.map((item, index) => <g key={`${item[0]}-${item[1]}-${index}`}><circle cx={item[0]} cy={item[1]} r="4.5" fill={index === 0 ? '#d33' : '#0875c9'} />{index > 0 && <text x={(item[0] + linePoints[index - 1][0]) / 2} y={(item[1] + linePoints[index - 1][1]) / 2 - 7} className="sketch-dimension">{Math.hypot(item[0] - linePoints[index - 1][0], item[1] - linePoints[index - 1][1]).toFixed(1)} mm</text>}</g>)}</>
           : tool === 'rectangle'
           ? <rect x={Math.min(preview.start[0], preview.end[0])} y={Math.min(preview.start[1], preview.end[1])} width={dx} height={dy} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />
@@ -343,6 +373,12 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
         {tool === 'rectangle' && drag && <><text x={(preview.start[0] + preview.end[0]) / 2} y={Math.min(preview.start[1], preview.end[1]) - 5} className="sketch-dimension">{dx.toFixed(1)} mm</text><text x={Math.max(preview.start[0], preview.end[0]) + 5} y={(preview.start[1] + preview.end[1]) / 2} className="sketch-dimension">{dy.toFixed(1)} mm</text></>}
         {tool === 'circle' && drag && <text x={preview.start[0] + 6} y={preview.start[1] - 6} className="sketch-dimension">R {Math.hypot(dx, dy).toFixed(1)} mm</text>}
       </svg>
+      {selectedSketchEntity && <aside className="sketch-property-manager">
+        <strong>{selectedSketchEntity.type === 'line' ? 'Line properties' : 'Entity properties'}</strong>
+        {selectedSketchEntity.type === 'line' && <label><span>Length (mm)</span><input type="number" min="0.01" step="0.01" value={Math.hypot(selectedSketchEntity.end[0] - selectedSketchEntity.start[0], selectedSketchEntity.end[1] - selectedSketchEntity.start[1]).toFixed(2)} onChange={(event) => updateLineLength(selectedSketchEntity, Number(event.target.value))} /></label>}
+        <label className="inline-check"><input type="checkbox" checked={selectedSketchEntity.construction === true} onChange={(event) => dispatchSketch({ type: 'updateEntity', entity: { ...selectedSketchEntity, construction: event.target.checked } })} /><span>For construction</span></label>
+        <button type="button" onClick={() => dispatchSketch({ type: 'removeEntities', entityIds: [selectedSketchEntity.id] })}>Delete entity</button>
+      </aside>}
       <small>{tool === 'line' ? 'Click endpoints. Click the first red point to close the profile.' : 'Click and drag in the sketch. Dimensions are displayed on the sketch.'}</small>
       <button className="primary-button" type="button" disabled={!drag || (feature.profile.type !== 'polyline' && dx < 1 && dy < 1)} onClick={() => setStage('extrude')}>Exit sketch</button>
     </section>

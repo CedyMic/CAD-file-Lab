@@ -1655,6 +1655,12 @@ textarea:focus-visible {
 .viewport-placeholder.sketch-mode .plane-stage .plane-picker { width: 100%; max-width: none; }
 .viewport-placeholder.sketch-mode .plane-stage .reference-plane-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: none; }
 .sketch-dimension { fill: #075f9f; font-size: 8px; font-weight: 700; paint-order: stroke; stroke: white; stroke-width: 2px; }
+.sketch-canvas polyline { pointer-events: none; }
+.sketch-entity { stroke: #0875c9; stroke-width: 7px; stroke-opacity: .001; cursor: pointer; pointer-events: stroke; }
+.sketch-entity.selected { stroke: #ff8a00; stroke-width: 4px; stroke-opacity: 1; }
+.sketch-property-manager { position: absolute; top: 124px; left: 24px; z-index: 8; display: grid; gap: 7px; width: 210px; padding: 9px; color: #24394b; background: #f8fafc; border: 1px solid #9eb1c0; border-radius: 5px; box-shadow: 0 5px 18px rgba(28,43,56,.18); }
+.sketch-property-manager label { color: #24394b; }
+.sketch-property-manager button { min-height: 29px; }
 .sketch-segment-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 5px; max-width: 620px; color: #334e63; font-size: 11px; }
 .cad-command-tabs { display: flex; gap: 2px; border-bottom: 1px solid #9eb1c0; }
 .cad-command-tabs button { padding: 7px 18px; color: #31495d; background: transparent; border: 0; border-bottom: 3px solid transparent; border-radius: 0; }
