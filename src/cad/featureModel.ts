@@ -4,6 +4,7 @@ export type SketchPlane = 'XY' | 'XZ' | 'YZ'
 export type SketchProfile =
   | { type: 'rectangle'; width: number; height: number }
   | { type: 'circle'; radius: number }
+  | { type: 'polyline'; points: Array<[number, number]> }
 
 export interface SketchExtrudeFeature {
   id: string
@@ -11,6 +12,8 @@ export interface SketchExtrudeFeature {
   name: string
   plane: SketchPlane
   planeOffset?: number
+  planeAngle?: number
+  planeAngleAxis?: 'horizontal' | 'vertical'
   profile: SketchProfile
   operation: 'boss' | 'cut'
   length: number
@@ -52,17 +55,31 @@ export function validateCadFeatureModel(input: CadFeatureModel): CadFeatureModel
     ids.add(feature.id)
     if (typeof feature.name !== 'string' || !feature.name.trim() || feature.name.length > 100) throw new Error('Every feature needs a valid name.')
     const profile = feature.profile
-    if (!profile || !['rectangle', 'circle'].includes(profile.type)) throw new Error('Choose a rectangle or circle sketch profile.')
+    if (!profile || !['rectangle', 'circle', 'polyline'].includes(profile.type)) throw new Error('Choose a supported closed sketch profile.')
     const cleanProfile: SketchProfile = profile.type === 'rectangle'
       ? { type: 'rectangle', width: dimension(profile.width, 'Sketch width'), height: dimension(profile.height, 'Sketch height') }
-      : { type: 'circle', radius: dimension(profile.radius, 'Sketch radius') }
+      : profile.type === 'circle'
+        ? { type: 'circle', radius: dimension(profile.radius, 'Sketch radius') }
+        : {
+            type: 'polyline',
+            points: profile.points.map((point) => {
+              if (!Array.isArray(point) || point.length !== 2 || point.some((value) => !Number.isFinite(value) || Math.abs(value) > MAX_PRIMITIVE_DIMENSION_MM)) throw new Error('Every sketch point must contain two valid coordinates.')
+              return [point[0], point[1]]
+            }),
+          }
+    if (cleanProfile.type === 'polyline' && cleanProfile.points.length < 3) throw new Error('A closed line sketch needs at least three points.')
     const planeOffset = signedOffset(feature.planeOffset)
+    const planeAngle = feature.planeAngle ?? 0
+    if (!Number.isFinite(planeAngle) || Math.abs(planeAngle) > 360) throw new Error('Plane angle must be between -360 and 360 degrees.')
+    const planeAngleAxis = feature.planeAngleAxis ?? 'horizontal'
+    if (!['horizontal', 'vertical'].includes(planeAngleAxis)) throw new Error('Choose a horizontal or vertical plane rotation axis.')
     return {
       id: feature.id,
       type: 'sketchExtrude',
       name: feature.name.trim(),
       plane: feature.plane,
       ...(planeOffset === 0 ? {} : { planeOffset }),
+      ...(planeAngle === 0 ? {} : { planeAngle, planeAngleAxis }),
       profile: cleanProfile,
       operation: feature.operation,
       length: dimension(feature.length, 'Extrude length'),

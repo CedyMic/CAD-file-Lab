@@ -32,6 +32,17 @@ test('preserves signed offset reference planes', () => {
   assert.throws(() => validateCadFeatureModel({ version: 1, features: [{ ...boss, planeOffset: 1_000_001 }] }), /Plane offset/)
 })
 
+test('validates angled reference planes and closed line profiles', () => {
+  const result = validateCadFeatureModel({ version: 1, features: [{
+    ...boss, plane: 'YZ', planeAngle: 37.5, planeAngleAxis: 'vertical',
+    profile: { type: 'polyline', points: [[0, 0], [50, 0], [25, 35]] },
+  }] })
+  assert.equal(result.features[0].planeAngle, 37.5)
+  assert.equal(result.features[0].profile.points.length, 3)
+  assert.throws(() => validateCadFeatureModel({ version: 1, features: [{ ...boss, planeAngle: 361 }] }), /Plane angle/)
+  assert.throws(() => validateCadFeatureModel({ version: 1, features: [{ ...boss, profile: { type: 'polyline', points: [[0, 0], [1, 1]] } }] }), /at least three/)
+})
+
 test('rejects unsafe or non-buildable histories', () => {
   assert.throws(() => validateCadFeatureModel({ version: 1, features: [] }), /at least one/)
   assert.throws(() => validateCadFeatureModel({ version: 1, features: [{ ...boss, operation: 'cut' }] }), /first feature.*boss/i)

@@ -186,7 +186,7 @@ function FeatureModelEditor({ model, disabled, onChange, onBuild }: {
       {feature.profile.type === 'rectangle' ? <>
         <label><span>Width (mm)</span><input type="number" min="0.01" max="1000000" step="0.01" required value={feature.profile.width} onChange={(event) => feature.profile.type === 'rectangle' && update(index, { ...feature, profile: { type: 'rectangle', width: Number(event.target.value), height: feature.profile.height } })} /></label>
         <label><span>Height (mm)</span><input type="number" min="0.01" max="1000000" step="0.01" required value={feature.profile.height} onChange={(event) => feature.profile.type === 'rectangle' && update(index, { ...feature, profile: { type: 'rectangle', width: feature.profile.width, height: Number(event.target.value) } })} /></label>
-      </> : <label><span>Radius (mm)</span><input type="number" min="0.01" max="1000000" step="0.01" required value={feature.profile.radius} onChange={(event) => feature.profile.type === 'circle' && update(index, { ...feature, profile: { type: 'circle', radius: Number(event.target.value) } })} /></label>}
+      </> : feature.profile.type === 'circle' ? <label><span>Radius (mm)</span><input type="number" min="0.01" max="1000000" step="0.01" required value={feature.profile.radius} onChange={(event) => feature.profile.type === 'circle' && update(index, { ...feature, profile: { type: 'circle', radius: Number(event.target.value) } })} /></label> : <small>Closed line profile</small>}
       <label><span>Operation</span><select disabled={index === 0} value={feature.operation} onChange={(event) => update(index, { ...feature, operation: event.target.value as 'boss' | 'cut' })}>
         <option value="boss">Boss extrude</option><option value="cut">Cut extrude</option>
       </select></label>
@@ -208,20 +208,24 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
   const [stage, setStage] = useState<'plane' | 'sketch' | 'extrude'>('plane')
   const [plane, setPlane] = useState<SketchExtrudeFeature['plane']>('XY')
   const [planeOffset, setPlaneOffset] = useState(0)
+  const [planeAngle, setPlaneAngle] = useState(0)
+  const [planeAngleAxis, setPlaneAngleAxis] = useState<'horizontal' | 'vertical'>('horizontal')
   const [creatingPlane, setCreatingPlane] = useState(false)
-  const [tool, setTool] = useState<'rectangle' | 'circle'>('rectangle')
+  const [tool, setTool] = useState<'line' | 'rectangle' | 'circle' | 'centerline' | 'arc' | 'dimension'>('line')
   const [drag, setDrag] = useState<{ start: [number, number]; end: [number, number] } | null>(null)
+  const [linePoints, setLinePoints] = useState<Array<[number, number]>>([])
   const feature = model.features.at(-1)!
   const replaceFeature = (next: SketchExtrudeFeature) => onChange({
     version: 1, features: model.features.map((item, index) => index === model.features.length - 1 ? next : item),
   })
   const startSketch = () => {
     const next: SketchExtrudeFeature = {
-      id: `feature-${crypto.randomUUID()}`, type: 'sketchExtrude', name: 'Boss-Extrude1', plane, planeOffset,
+      id: `feature-${crypto.randomUUID()}`, type: 'sketchExtrude', name: 'Boss-Extrude1', plane, planeOffset, planeAngle, planeAngleAxis,
       profile: { type: 'rectangle', width: 60, height: 40 }, operation: 'boss', length: 10, reversed: false,
     }
     onChange({ version: 1, features: [next] })
     setDrag(null)
+    setLinePoints([])
     setStage('sketch')
   }
   const point = (event: ReactPointerEvent<SVGSVGElement>): [number, number] => {
@@ -248,6 +252,8 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       <legend>Plane1</legend>
       <label><span>Reference plane</span><select value={plane} onChange={(event) => setPlane(event.target.value as SketchExtrudeFeature['plane'])}><option value="XY">Top (XY)</option><option value="XZ">Front (XZ)</option><option value="YZ">Right (YZ)</option></select></label>
       <label><span>Offset (mm)</span><input type="number" step="0.01" value={planeOffset} onChange={(event) => setPlaneOffset(Number(event.target.value))} /></label>
+      <label><span>Angle (deg)</span><input type="number" min="-360" max="360" step="0.1" value={planeAngle} onChange={(event) => setPlaneAngle(Number(event.target.value))} /></label>
+      <label><span>Rotation axis</span><select value={planeAngleAxis} onChange={(event) => setPlaneAngleAxis(event.target.value as 'horizontal' | 'vertical')}><option value="horizontal">Horizontal sketch axis</option><option value="vertical">Vertical sketch axis</option></select></label>
       <small>Use a negative value to offset in the opposite direction.</small>
     </fieldset>}
     <button className="primary-button" type="button" onClick={startSketch}>Start sketch</button>
@@ -257,31 +263,53 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     const dx = Math.abs(preview.end[0] - preview.start[0]); const dy = Math.abs(preview.end[1] - preview.start[1])
     return <section className="sketch-workflow">
       <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
+      <div className="cad-command-tabs"><button className="selected" type="button">Sketch</button><button type="button" disabled>Features</button></div>
       <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
+        <button className={tool === 'line' ? 'selected' : ''} type="button" onClick={() => { setTool('line'); setDrag(null) }}>╱ Line</button>
+        <button className={tool === 'centerline' ? 'selected' : ''} type="button" disabled title="Coming in the next sketch-kernel milestone">┄ Centerline</button>
         <button className={tool === 'rectangle' ? 'selected' : ''} type="button" onClick={() => { setTool('rectangle'); setDrag(null) }}>▭ Rectangle</button>
         <button className={tool === 'circle' ? 'selected' : ''} type="button" onClick={() => { setTool('circle'); setDrag(null) }}>○ Circle</button>
+        <button className={tool === 'arc' ? 'selected' : ''} type="button" disabled title="Coming in the next sketch-kernel milestone">⌒ Arc</button>
+        <button className={tool === 'dimension' ? 'selected' : ''} type="button" disabled title="Dimensions are currently shown automatically">↔ Smart Dimension</button>
+        <button type="button" disabled>Trim</button><button type="button" disabled>Offset entities</button><button type="button" disabled>Mirror entities</button>
       </div>
       <svg className="sketch-canvas" viewBox="0 0 320 240"
-        onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); const start = point(event); setDrag({ start, end: start }) }}
-        onPointerMove={(event) => { if (drag && event.currentTarget.hasPointerCapture(event.pointerId)) setDrag({ ...drag, end: point(event) }) }}
-        onPointerUp={(event) => { const end = point(event); finish(end); event.currentTarget.releasePointerCapture(event.pointerId) }}>
+        onPointerDown={(event) => {
+          const start = point(event)
+          if (tool === 'line') {
+            if (linePoints.length >= 3 && Math.hypot(start[0] - linePoints[0][0], start[1] - linePoints[0][1]) < 8) {
+              replaceFeature({ ...feature, plane, profile: { type: 'polyline', points: linePoints.map(([x, y]) => [Math.round(x - 160), Math.round(120 - y)]) } })
+              setDrag({ start: linePoints[0], end: linePoints[0] })
+            } else setLinePoints((current) => [...current, start])
+            return
+          }
+          if (tool !== 'rectangle' && tool !== 'circle') return
+          event.currentTarget.setPointerCapture(event.pointerId); setDrag({ start, end: start })
+        }}
+        onPointerMove={(event) => { if ((tool === 'rectangle' || tool === 'circle') && drag && event.currentTarget.hasPointerCapture(event.pointerId)) setDrag({ ...drag, end: point(event) }) }}
+        onPointerUp={(event) => { if ((tool === 'rectangle' || tool === 'circle') && event.currentTarget.hasPointerCapture(event.pointerId)) { finish(point(event)); event.currentTarget.releasePointerCapture(event.pointerId) } }}>
         <defs><pattern id="sketch-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#d5e1eb" strokeWidth=".6" /></pattern></defs>
         <rect width="320" height="240" fill="url(#sketch-grid)" /><path d="M160 0V240M0 120H320" stroke="#789dbb" /><circle cx="160" cy="120" r="3" fill="#d33" />
-        {tool === 'rectangle'
+        {tool === 'line' ? <>{linePoints.length > 1 && <polyline points={linePoints.map((item) => item.join(',')).join(' ')} fill="none" stroke="#0875c9" strokeWidth="2" />}{linePoints.map((item, index) => <g key={`${item[0]}-${item[1]}-${index}`}><circle cx={item[0]} cy={item[1]} r="3.5" fill={index === 0 ? '#d33' : '#0875c9'} />{index > 0 && <text x={(item[0] + linePoints[index - 1][0]) / 2} y={(item[1] + linePoints[index - 1][1]) / 2 - 5} className="sketch-dimension">{Math.hypot(item[0] - linePoints[index - 1][0], item[1] - linePoints[index - 1][1]).toFixed(1)}</text>}</g>)}</>
+          : tool === 'rectangle'
           ? <rect x={Math.min(preview.start[0], preview.end[0])} y={Math.min(preview.start[1], preview.end[1])} width={dx} height={dy} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />
           : <circle cx={preview.start[0]} cy={preview.start[1]} r={Math.hypot(dx, dy)} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />}
+        {tool === 'rectangle' && drag && <><text x={(preview.start[0] + preview.end[0]) / 2} y={Math.min(preview.start[1], preview.end[1]) - 5} className="sketch-dimension">{dx.toFixed(1)} mm</text><text x={Math.max(preview.start[0], preview.end[0]) + 5} y={(preview.start[1] + preview.end[1]) / 2} className="sketch-dimension">{dy.toFixed(1)} mm</text></>}
+        {tool === 'circle' && drag && <text x={preview.start[0] + 6} y={preview.start[1] - 6} className="sketch-dimension">R {Math.hypot(dx, dy).toFixed(1)} mm</text>}
       </svg>
-      <small>Click and drag in the sketch. Enter exact dimensions after exiting.</small>
-      <button className="primary-button" type="button" disabled={!drag || (dx < 1 && dy < 1)} onClick={() => setStage('extrude')}>Exit sketch</button>
+      <small>{tool === 'line' ? 'Click endpoints. Click the first red point to close the profile.' : 'Click and drag in the sketch. Dimensions are displayed on the sketch.'}</small>
+      <button className="primary-button" type="button" disabled={!drag || (feature.profile.type !== 'polyline' && dx < 1 && dy < 1)} onClick={() => setStage('extrude')}>Exit sketch</button>
     </section>
   }
   return <form className="sketch-workflow" onSubmit={(event) => { event.preventDefault(); onBuild() }}>
+    <div className="cad-command-tabs"><button type="button" onClick={() => setStage('sketch')}>Sketch</button><button className="selected" type="button">Features</button></div>
+    <div className="feature-tools" role="toolbar" aria-label="Feature tools"><button className="selected" type="button">Extruded Boss/Base</button><button type="button" disabled>Extruded Cut</button><button type="button" disabled>Revolve</button><button type="button" disabled>Sweep</button><button type="button" disabled>Loft</button><button type="button" disabled>Fillet</button><button type="button" disabled>Pattern</button><button type="button" onClick={() => setStage('plane')}>Reference Geometry</button></div>
     <span className="panel-label">Boss-Extrude</span>
-    <div className="sketch-summary"><div><strong>Sketch1</strong><span>{feature.plane}{feature.planeOffset ? ` + ${feature.planeOffset} mm` : ''} · {feature.profile.type === 'rectangle' ? `${feature.profile.width} × ${feature.profile.height} mm` : `Ø ${feature.profile.radius * 2} mm`}</span></div><button type="button" onClick={() => setStage('sketch')}>Edit sketch</button></div>
+    <div className="sketch-summary"><div><strong>Sketch1</strong><span>{feature.plane}{feature.planeOffset ? ` + ${feature.planeOffset} mm` : ''} · {feature.profile.type === 'rectangle' ? `${feature.profile.width} × ${feature.profile.height} mm` : feature.profile.type === 'circle' ? `Ø ${feature.profile.radius * 2} mm` : `${feature.profile.points.length} line segments`}</span></div><button type="button" onClick={() => setStage('sketch')}>Edit sketch</button></div>
     {feature.profile.type === 'rectangle' ? <div className="dimension-grid">
       <label><span>Width (mm)</span><input type="number" min="0.01" step="0.01" value={feature.profile.width} onChange={(event) => feature.profile.type === 'rectangle' && replaceFeature({ ...feature, profile: { ...feature.profile, width: Number(event.target.value) } })} /></label>
       <label><span>Height (mm)</span><input type="number" min="0.01" step="0.01" value={feature.profile.height} onChange={(event) => feature.profile.type === 'rectangle' && replaceFeature({ ...feature, profile: { ...feature.profile, height: Number(event.target.value) } })} /></label>
-    </div> : <label><span>Diameter (mm)</span><input type="number" min="0.01" step="0.01" value={feature.profile.radius * 2} onChange={(event) => feature.profile.type === 'circle' && replaceFeature({ ...feature, profile: { type: 'circle', radius: Number(event.target.value) / 2 } })} /></label>}
+    </div> : feature.profile.type === 'circle' ? <label><span>Diameter (mm)</span><input type="number" min="0.01" step="0.01" value={feature.profile.radius * 2} onChange={(event) => feature.profile.type === 'circle' && replaceFeature({ ...feature, profile: { type: 'circle', radius: Number(event.target.value) / 2 } })} /></label> : <div className="sketch-segment-list">{feature.profile.points.map((item, index) => <span key={`${item[0]}-${item[1]}-${index}`}>Point {index + 1}: {item[0]}, {item[1]} mm</span>)}</div>}
     <label><span>Depth (mm)</span><input type="number" min="0.01" step="0.01" value={feature.length} onChange={(event) => replaceFeature({ ...feature, length: Number(event.target.value) })} /></label>
     <label className="inline-check"><input type="checkbox" checked={feature.reversed} onChange={(event) => replaceFeature({ ...feature, reversed: event.target.checked })} /><span>Reverse direction</span></label>
     <button className="primary-button" type="submit" disabled={disabled}>{disabled ? 'Building…' : 'Build feature'}</button>
@@ -1498,13 +1526,24 @@ function App() {
               </div>
             )}
 
-            {model ? (
+            {model || activeTool === 'create' ? (
               <ul>
-                <li className="model-tree-file">
+                {model && <li className="model-tree-file">
                   <span aria-hidden="true">▾</span>
                   <strong title={model.fileName}>{model.fileName}</strong>
-                </li>
-                {model.bodySummaries.map((body) => (
+                </li>}
+                {(model?.featureModel ?? (activeTool === 'create' ? featureModel : null)) && <>
+                  <li className="feature-tree-folder"><span aria-hidden="true">⌄</span><strong>Origin</strong></li>
+                  <li className="feature-tree-reference"><span aria-hidden="true">▱</span>Front Plane</li>
+                  <li className="feature-tree-reference"><span aria-hidden="true">▱</span>Top Plane</li>
+                  <li className="feature-tree-reference"><span aria-hidden="true">▱</span>Right Plane</li>
+                  {(model?.featureModel ?? featureModel).features.map((feature, index) => <li className="feature-tree-group" key={`tree-${feature.id}`}>
+                    {(feature.planeOffset || feature.planeAngle) && <div className="feature-tree-reference"><span aria-hidden="true">▱</span><span>Plane{index + 1}</span><small>{feature.plane}{feature.planeOffset ? ` · ${feature.planeOffset} mm` : ''}{feature.planeAngle ? ` · ${feature.planeAngle}°` : ''}</small></div>}
+                    <div className="feature-tree-sketch"><span aria-hidden="true">⌗</span><span>Sketch{index + 1}</span><small>{feature.profile.type}</small></div>
+                    <div className="feature-tree-feature"><span aria-hidden="true">▰</span><strong>{feature.name}</strong><small>{feature.operation === 'boss' ? 'Boss-Extrude' : 'Cut-Extrude'}</small></div>
+                  </li>)}
+                </>}
+                {model?.bodySummaries.map((body) => (
                   <li
                     className={`model-tree-body${selectedPartIds.has(body.id) ? ' selected' : ''}${hiddenPartIds.has(body.id) ? ' hidden' : ''}`}
                     key={body.id}
@@ -1726,7 +1765,7 @@ function App() {
           </div>
 
           <div
-            className="viewport-placeholder"
+            className={`viewport-placeholder ${activeTool === 'create' && createMode === 'features' ? 'sketch-mode' : ''}`}
             onDragOver={(event) => {
               event.preventDefault()
             }}
@@ -1739,7 +1778,9 @@ function App() {
               )
             }}
           >
-            <CadViewport
+            {activeTool === 'create' && createMode === 'features' ? (
+              <SketchCreator model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} />
+            ) : <CadViewport
               model={model}
               settings={
                 displaySettings
@@ -1756,7 +1797,7 @@ function App() {
               onMeasurementChange={setMeasurementSummary}
               onSelectPart={selectPart}
               onClearSelection={() => setSelectedPartIds(new Set())}
-            />
+            />}
 
             {error && (
               <div className="viewport-error" role="alert">
@@ -1765,7 +1806,7 @@ function App() {
               </div>
             )}
 
-            {!model && !isLoading && (
+            {!model && !isLoading && activeTool !== 'create' && (
               <section className="empty-workspace" aria-labelledby="empty-workspace-title">
                 <div className="start-scope">
                   <span>Your private 3D workspace</span>
@@ -1961,7 +2002,7 @@ function App() {
                 {isCreatingPrimitive ? 'Building…' : primitiveBodyId && model?.bodyId === primitiveBodyId ? 'Update part' : 'Create part'}
               </button>
               <small>Created locally · Editable dimensions during this session</small>
-              </form> : <SketchCreator model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} />}
+              </form> : <section className="primitive-panel"><span className="panel-label">Sketch</span><p>Sketch tools and geometry are shown in the main graphics area. Select an entity there to edit its dimensions here.</p></section>}
             </>
           )}
 

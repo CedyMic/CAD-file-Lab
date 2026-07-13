@@ -8,12 +8,14 @@ import { DOMParser as XmlDomParser } from '@xmldom/xmldom'
 
 import {
   deserializeShape,
+  draw,
   importSTEP,
   drawCircle,
   drawRectangle,
   makeBox,
   makeCylinder,
   makeSphere,
+  Plane,
   setOC,
   Solid,
 } from 'replicad'
@@ -720,8 +722,27 @@ async function updatePrimitive(
 function makeSketchExtrusion(feature: SketchExtrudeFeature): Solid {
   const drawing = feature.profile.type === 'rectangle'
     ? drawRectangle(feature.profile.width, feature.profile.height)
-    : drawCircle(feature.profile.radius)
-  const sketch = drawing.sketchOnPlane(feature.plane, feature.planeOffset ?? 0)
+    : feature.profile.type === 'circle'
+      ? drawCircle(feature.profile.radius)
+      : feature.profile.points.slice(1).reduce((pen, point) => pen.lineTo(point), draw(feature.profile.points[0])).close()
+  let sketch
+  if (feature.planeAngle) {
+    const bases = {
+      XY: { normal: [0, 0, 1] as [number, number, number], horizontal: [1, 0, 0] as [number, number, number], vertical: [0, 1, 0] as [number, number, number] },
+      XZ: { normal: [0, -1, 0] as [number, number, number], horizontal: [1, 0, 0] as [number, number, number], vertical: [0, 0, 1] as [number, number, number] },
+      YZ: { normal: [1, 0, 0] as [number, number, number], horizontal: [0, 1, 0] as [number, number, number], vertical: [0, 0, 1] as [number, number, number] },
+    }
+    const base = bases[feature.plane]
+    const axis = base[feature.planeAngleAxis ?? 'horizontal']
+    const radians = feature.planeAngle * Math.PI / 180
+    const dot = axis[0] * base.normal[0] + axis[1] * base.normal[1] + axis[2] * base.normal[2]
+    const cross = [axis[1] * base.normal[2] - axis[2] * base.normal[1], axis[2] * base.normal[0] - axis[0] * base.normal[2], axis[0] * base.normal[1] - axis[1] * base.normal[0]]
+    const normal = base.normal.map((value, index) => value * Math.cos(radians) + cross[index] * Math.sin(radians) + axis[index] * dot * (1 - Math.cos(radians))) as [number, number, number]
+    const origin = base.normal.map((value) => value * (feature.planeOffset ?? 0)) as [number, number, number]
+    const customPlane = new Plane(origin, axis, normal)
+    sketch = drawing.sketchOnPlane(customPlane)
+    customPlane.delete()
+  } else sketch = drawing.sketchOnPlane(feature.plane, feature.planeOffset ?? 0)
   return sketch.extrude(feature.reversed ? -feature.length : feature.length) as Solid
 }
 
