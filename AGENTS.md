@@ -20,6 +20,7 @@ These requirements apply to every implementation and review in this repository.
 ## CAD behavior review
 
 - Research the current official SOLIDWORKS Design Help before implementing each CAD workflow. Use official behavior as acceptance criteria and image references only for visual placement/density.
+- Videos may be used to observe functional interaction sequences, but never copy audiovisual assets, proprietary icons, wording, source code, or pixel-level visual expression. Follow `docs/INDEPENDENT_UI_IMPLEMENTATION_POLICY.md`.
 - Verify continuous tool behavior, live previews, snapping/inference, selection feedback, Escape semantics, undo/redo, editable dimensions, and FeatureManager history.
 - Compare workflows to the equivalent SolidWorks command before implementation and before deployment.
 - Preserve compactness and familiar CAD behavior across all future features without requiring the user to repeat this direction.
