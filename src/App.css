@@ -1631,18 +1631,22 @@ textarea:focus-visible {
 .reference-plane-editor { display: grid; gap: 7px; margin: 0; padding: 8px; border: 1px solid #4e6c83; border-radius: 7px; }
 .reference-plane-editor legend { padding: 0 5px; color: #78baff; font-size: 11px; font-weight: 700; }
 .viewport-placeholder.sketch-mode { background: #eef3f7; }
-.viewport-placeholder.sketch-mode > .sketch-workflow { position: absolute; inset: 0; grid-template-rows: auto auto minmax(0, 1fr) auto auto; padding: 14px 18px; color: #172534; background: #eef3f7; border: 0; z-index: 4; }
+.viewport-placeholder.sketch-mode > .sketch-workflow { position: absolute; inset: 0; grid-template-rows: auto auto auto minmax(0, 1fr) auto auto; padding: 10px 14px; overflow: hidden; color: #172534; background: #eef3f7; border: 0; z-index: 4; }
 .viewport-placeholder.sketch-mode .sketch-workflow p,
 .viewport-placeholder.sketch-mode .sketch-workflow small { color: #50677b; }
 .viewport-placeholder.sketch-mode .sketch-workflow label { color: #24394b; }
-.viewport-placeholder.sketch-mode .plane-picker { max-width: 760px; }
-.viewport-placeholder.sketch-mode .plane-picker button { min-height: 110px; color: #24394b; background: white; border-color: #a9bbc9; }
+.viewport-placeholder.sketch-mode .plane-picker { grid-template-columns: repeat(3, minmax(110px, 170px)); max-width: 530px; }
+.viewport-placeholder.sketch-mode .plane-picker button { grid-template-columns: 34px 1fr; align-items: center; min-height: 48px; padding: 5px 9px; color: #24394b; background: white; border-color: #a9bbc9; text-align: left; }
+.viewport-placeholder.sketch-mode .plane-picker button span { font-size: 13px; text-align: center; }
+.viewport-placeholder.sketch-mode .plane-picker button strong { font-size: 10px; }
 .viewport-placeholder.sketch-mode .plane-picker button.selected { color: white; background: #176fc5; }
-.viewport-placeholder.sketch-mode .sketch-tools { display: flex; justify-content: flex-start; }
-.viewport-placeholder.sketch-mode .sketch-tools button { min-width: 120px; }
+.viewport-placeholder.sketch-mode .sketch-tools { position: relative; z-index: 6; display: flex; flex-wrap: wrap; justify-content: flex-start; align-content: flex-start; max-height: 92px; padding: 5px; overflow-y: auto; background: #e3ebf1; border: 1px solid #a9bbc9; border-radius: 5px; }
+.viewport-placeholder.sketch-mode .sketch-tools button { flex: 0 0 auto; min-width: 108px; min-height: 34px; }
 .viewport-placeholder.sketch-mode .sketch-canvas { width: 100%; height: 100%; aspect-ratio: auto; }
 .viewport-placeholder.sketch-mode .sketch-summary { color: #24394b; background: white; border-color: #a9bbc9; }
 .viewport-placeholder.sketch-mode .dimension-grid { max-width: 520px; }
+.viewport-placeholder.sketch-mode .reference-plane-editor { grid-template-columns: repeat(3, minmax(120px, 190px)); align-items: end; max-width: 620px; gap: 6px; padding: 6px 8px; }
+.viewport-placeholder.sketch-mode .reference-plane-editor small { grid-column: 1 / -1; }
 .sketch-dimension { fill: #075f9f; font-size: 8px; font-weight: 700; paint-order: stroke; stroke: white; stroke-width: 2px; }
 .sketch-segment-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 5px; max-width: 620px; color: #334e63; font-size: 11px; }
 .cad-command-tabs { display: flex; gap: 2px; border-bottom: 1px solid #9eb1c0; }

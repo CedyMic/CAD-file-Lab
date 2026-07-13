@@ -302,7 +302,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
       <div className="cad-command-tabs"><button className="selected" type="button">Sketch</button><button type="button" disabled>Features</button></div>
       <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
-        <button className={tool === 'line' ? 'selected' : ''} type="button" onClick={() => { setTool('line'); setDrag(null) }}>╱ Line</button>
+        <button className={tool === 'line' ? 'selected' : ''} type="button" onClick={() => { setTool('line'); setDrag(null); setLinePoints([]); setHoverPoint(null) }}>╱ Line</button>
         <button className={tool === 'centerline' ? 'selected' : ''} type="button" disabled title="Coming in the next sketch-kernel milestone">┄ Centerline</button>
         <button className={tool === 'rectangle' ? 'selected' : ''} type="button" onClick={() => { setTool('rectangle'); setDrag(null) }}>▭ Rectangle</button>
         <button className={tool === 'circle' ? 'selected' : ''} type="button" onClick={() => { setTool('circle'); setDrag(null) }}>○ Circle</button>
@@ -316,6 +316,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
           if (tool === 'line') {
             if (linePoints.length >= 3 && Math.hypot(start[0] - linePoints[0][0], start[1] - linePoints[0][1]) < 8) {
               replaceFeature({ ...feature, plane, profile: { type: 'polyline', points: linePoints.map(([x, y]) => [Math.round((x - origin[0]) * 10) / 10, Math.round((origin[1] - y) * 10) / 10]) } })
+              setLinePoints((current) => [...current, current[0]])
               setDrag({ start: linePoints[0], end: linePoints[0] })
               setTool('select')
               setHoverPoint(null)
