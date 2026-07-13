@@ -1681,3 +1681,16 @@ textarea:focus-visible {
 .measure-commandbar button { min-height: 29px; padding: 5px 10px; }
 .measure-commandbar button.selected { color: #fff; background: #176fc5; border-color: #6cb4f5; }
 .measure-commandbar small { align-self: center; max-width: 270px; color: #9fb4c4; font-size: 10px; line-height: 1.3; }
+.measure-manager { display: grid; gap: 7px; padding: 8px; color: #24394b; background: #f6f8fa; border-bottom: 1px solid #a9bbc9; }
+.measure-manager header { display: flex; align-items: center; justify-content: space-between; }
+.measure-manager header button { min-width: 27px; min-height: 27px; padding: 0; }
+.measure-manager-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+.measure-manager-tools button { min-width: 0; min-height: 28px; padding: 3px; font-size: 10px; }
+.measure-manager-tools button.selected { color: #fff; background: #176fc5; }
+.measure-manager-selection { display: grid; gap: 3px; min-height: 54px; padding: 6px; background: #fff; border: 1px solid #9eb1c0; }
+.measure-manager-selection span { color: #60798d; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.measure-manager-selection strong { padding: 3px 5px; color: #fff; background: #1776c9; font-size: 10px; }
+.measure-manager-selection small { color: #7890a3; font-size: 10px; }
+.measure-manager-results { display: grid; gap: 2px; padding-block: 4px; border-block: 1px solid #c5d1da; }
+.measure-manager-results div { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; }
+.measure-manager-results div span { color: #60798d; }

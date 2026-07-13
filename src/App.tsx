@@ -216,6 +216,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
   const [tool, setTool] = useState<'select' | 'line' | 'rectangle' | 'circle' | 'centerline' | 'arc' | 'dimension'>('line')
   const [drag, setDrag] = useState<{ start: [number, number]; end: [number, number] } | null>(null)
   const [linePoints, setLinePoints] = useState<Array<[number, number]>>([])
+  const [arcPoints, setArcPoints] = useState<Array<[number, number]>>([])
   const [hoverPoint, setHoverPoint] = useState<[number, number] | null>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 900, height: 520 })
   const canvasRef = useRef<SVGSVGElement>(null)
@@ -238,9 +239,11 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
   }, [stage])
   useEffect(() => {
     const stopLine = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && stage === 'sketch' && tool === 'line') {
+      if (event.key === 'Escape' && stage === 'sketch' && tool !== 'select') {
         setTool('select')
         setHoverPoint(null)
+        setDrag(null)
+        setArcPoints([])
       }
     }
     window.addEventListener('keydown', stopLine)
@@ -292,6 +295,14 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     replaceFeature({ ...feature, plane, profile: tool === 'rectangle'
       ? { type: 'rectangle', width: Math.max(1, Math.round(dx)), height: Math.max(1, Math.round(dy)) }
       : { type: 'circle', radius: Math.max(0.5, Math.round(Math.hypot(dx, dy) * 10) / 10) } })
+    if (tool === 'circle') {
+      dispatchSketch({ type: 'addEntity', entity: { id: `circle-${crypto.randomUUID()}`, type: 'circle', center: drag.start, radius: Math.hypot(end[0] - drag.start[0], end[1] - drag.start[1]) } })
+    } else if (tool === 'rectangle') {
+      const x1 = Math.min(drag.start[0], end[0]); const x2 = Math.max(drag.start[0], end[0])
+      const y1 = Math.min(drag.start[1], end[1]); const y2 = Math.max(drag.start[1], end[1])
+      const corners: Array<[number, number]> = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+      corners.forEach((start, index) => dispatchSketch({ type: 'addEntity', entity: { id: `line-${crypto.randomUUID()}`, type: 'line', start, end: corners[(index + 1) % corners.length] } }))
+    }
     setDrag({ start: drag.start, end })
   }
   if (stage === 'plane') return <section className="sketch-workflow plane-stage">
@@ -317,6 +328,13 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     const preview = drag ?? { start: [origin[0] - 50, origin[1] - 35] as [number, number], end: tool === 'rectangle' ? [origin[0] + 50, origin[1] + 35] as [number, number] : [origin[0] + 10, origin[1] - 35] as [number, number] }
     const dx = Math.abs(preview.end[0] - preview.start[0]); const dy = Math.abs(preview.end[1] - preview.start[1])
     const selectedSketchEntity = sketchState.document.entities.find((entity) => sketchState.selectedEntityIds.includes(entity.id))
+    const arcPath = (center: [number, number], radius: number, startAngle: number, endAngle: number) => {
+      const radians = (degrees: number) => degrees * Math.PI / 180
+      const start = [center[0] + radius * Math.cos(radians(startAngle)), center[1] + radius * Math.sin(radians(startAngle))]
+      const end = [center[0] + radius * Math.cos(radians(endAngle)), center[1] + radius * Math.sin(radians(endAngle))]
+      const sweep = ((endAngle - startAngle) % 360 + 360) % 360
+      return `M${start[0]} ${start[1]} A${radius} ${radius} 0 ${sweep > 180 ? 1 : 0} 1 ${end[0]} ${end[1]}`
+    }
     const updateLineLength = (entity: Extract<SketchEntity, { type: 'line' }>, length: number) => {
       const current = Math.hypot(entity.end[0] - entity.start[0], entity.end[1] - entity.start[1])
       if (!Number.isFinite(length) || length <= 0 || current <= 0) return
@@ -326,19 +344,31 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
       <div className="cad-command-tabs"><button className="selected" type="button">Sketch</button><button type="button" disabled>Features</button></div>
       <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
+        <button className={tool === 'select' ? 'selected' : ''} type="button" onClick={() => { setTool('select'); setDrag(null); setHoverPoint(null); setArcPoints([]) }}>↖ Select</button>
         <button type="button" disabled={!sketchState.undoStack.length} onClick={() => dispatchSketch({ type: 'undo' })}>↶ Undo</button>
         <button type="button" disabled={!sketchState.redoStack.length} onClick={() => dispatchSketch({ type: 'redo' })}>↷ Redo</button>
         <button className={tool === 'line' ? 'selected' : ''} type="button" onClick={() => { setTool('line'); setDrag(null); setLinePoints([]); setHoverPoint(null) }}>╱ Line</button>
         <button className={tool === 'centerline' ? 'selected' : ''} type="button" disabled title="Coming in the next sketch-kernel milestone">┄ Centerline</button>
         <button className={tool === 'rectangle' ? 'selected' : ''} type="button" onClick={() => { setTool('rectangle'); setDrag(null) }}>▭ Rectangle</button>
         <button className={tool === 'circle' ? 'selected' : ''} type="button" onClick={() => { setTool('circle'); setDrag(null) }}>○ Circle</button>
-        <button className={tool === 'arc' ? 'selected' : ''} type="button" disabled title="Coming in the next sketch-kernel milestone">⌒ Arc</button>
-        <button className={tool === 'dimension' ? 'selected' : ''} type="button" disabled title="Dimensions are currently shown automatically">↔ Smart Dimension</button>
+        <button className={tool === 'arc' ? 'selected' : ''} type="button" onClick={() => { setTool('arc'); setArcPoints([]); setDrag(null) }}>⌒ Centerpoint Arc</button>
+        <button className={tool === 'dimension' ? 'selected' : ''} type="button" onClick={() => setTool('dimension')}>↔ Smart Dimension</button>
         <button type="button" disabled>Trim</button><button type="button" disabled>Offset entities</button><button type="button" disabled>Mirror entities</button>
       </div>
       <svg ref={canvasRef} className="sketch-canvas" viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
         onPointerDown={(event) => {
           const start = tool === 'line' ? snappedLinePoint(point(event)) : point(event)
+          if (tool === 'arc') {
+            const next = [...arcPoints, start]
+            if (next.length === 3) {
+              const [center, arcStart, arcEnd] = next
+              const radius = Math.hypot(arcStart[0] - center[0], arcStart[1] - center[1])
+              const angle = (point: [number, number]) => Math.atan2(point[1] - center[1], point[0] - center[0]) * 180 / Math.PI
+              if (radius > 0.01) dispatchSketch({ type: 'addEntity', entity: { id: `arc-${crypto.randomUUID()}`, type: 'arc', center, radius, startAngle: angle(arcStart), endAngle: angle(arcEnd) } })
+              setArcPoints([]); setTool('select')
+            } else setArcPoints(next)
+            return
+          }
           if (tool === 'line') {
             if (linePoints.length >= 3 && Math.hypot(start[0] - linePoints[0][0], start[1] - linePoints[0][1]) < 8) {
               dispatchSketch({ type: 'addEntity', entity: { id: `line-${crypto.randomUUID()}`, type: 'line', start: linePoints.at(-1)!, end: linePoints[0] } })
@@ -365,17 +395,22 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
         onPointerUp={(event) => { if ((tool === 'rectangle' || tool === 'circle') && event.currentTarget.hasPointerCapture(event.pointerId)) { finish(point(event)); event.currentTarget.releasePointerCapture(event.pointerId) } }}>
         <defs><pattern id="sketch-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#d5e1eb" strokeWidth=".6" /></pattern></defs>
         <rect width={canvasSize.width} height={canvasSize.height} fill="url(#sketch-grid)" /><path d={`M${origin[0]} 0V${canvasSize.height}M0 ${origin[1]}H${canvasSize.width}`} stroke="#789dbb" /><circle cx={origin[0]} cy={origin[1]} r="3" fill="#d33" />
-        {sketchState.document.entities.map((entity) => entity.type === 'line' && <line key={entity.id} x1={entity.start[0]} y1={entity.start[1]} x2={entity.end[0]} y2={entity.end[1]} className={`sketch-entity${sketchState.selectedEntityIds.includes(entity.id) ? ' selected' : ''}`} onPointerDown={(event) => { if (tool !== 'select') return; event.stopPropagation(); dispatchSketch({ type: 'select', entityId: entity.id, additive: event.ctrlKey || event.metaKey || event.shiftKey }) }} />)}
-        {(tool === 'line' || linePoints.length > 0) ? <>{linePoints.length > 1 && <polyline points={linePoints.map((item) => item.join(',')).join(' ')} fill="none" stroke="#0875c9" strokeWidth="2" />}{tool === 'line' && linePoints.length > 0 && hoverPoint && <line x1={linePoints.at(-1)![0]} y1={linePoints.at(-1)![1]} x2={hoverPoint[0]} y2={hoverPoint[1]} stroke="#1595e6" strokeWidth="2" strokeDasharray="5 3" />}{linePoints.map((item, index) => <g key={`${item[0]}-${item[1]}-${index}`}><circle cx={item[0]} cy={item[1]} r="4.5" fill={index === 0 ? '#d33' : '#0875c9'} />{index > 0 && <text x={(item[0] + linePoints[index - 1][0]) / 2} y={(item[1] + linePoints[index - 1][1]) / 2 - 7} className="sketch-dimension">{Math.hypot(item[0] - linePoints[index - 1][0], item[1] - linePoints[index - 1][1]).toFixed(1)} mm</text>}</g>)}</>
-          : tool === 'rectangle'
-          ? <rect x={Math.min(preview.start[0], preview.end[0])} y={Math.min(preview.start[1], preview.end[1])} width={dx} height={dy} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />
-          : <circle cx={preview.start[0]} cy={preview.start[1]} r={Math.hypot(dx, dy)} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />}
+        {sketchState.document.entities.map((entity) => entity.type === 'line' && <line key={entity.id} x1={entity.start[0]} y1={entity.start[1]} x2={entity.end[0]} y2={entity.end[1]} className={`sketch-entity${sketchState.selectedEntityIds.includes(entity.id) ? ' selected' : ''}`} onPointerDown={(event) => { if (tool !== 'select' && tool !== 'dimension') return; event.stopPropagation(); dispatchSketch({ type: 'select', entityId: entity.id, additive: event.ctrlKey || event.metaKey || event.shiftKey }) }} />)}
+        {sketchState.document.entities.map((entity) => entity.type === 'circle' ? <circle key={entity.id} cx={entity.center[0]} cy={entity.center[1]} r={entity.radius} fill="none" className={`sketch-entity${sketchState.selectedEntityIds.includes(entity.id) ? ' selected' : ''}`} onPointerDown={(event) => { if (tool !== 'select' && tool !== 'dimension') return; event.stopPropagation(); dispatchSketch({ type: 'select', entityId: entity.id, additive: event.ctrlKey || event.metaKey || event.shiftKey }) }} /> : entity.type === 'arc' ? <path key={entity.id} d={arcPath(entity.center, entity.radius, entity.startAngle, entity.endAngle)} fill="none" className={`sketch-entity${sketchState.selectedEntityIds.includes(entity.id) ? ' selected' : ''}`} onPointerDown={(event) => { if (tool !== 'select' && tool !== 'dimension') return; event.stopPropagation(); dispatchSketch({ type: 'select', entityId: entity.id, additive: event.ctrlKey || event.metaKey || event.shiftKey }) }} /> : null)}
+        {tool === 'arc' && arcPoints.length > 0 && <>{<circle cx={arcPoints[0][0]} cy={arcPoints[0][1]} r="4" fill="#d33" />}{arcPoints.length === 2 && <circle cx={arcPoints[0][0]} cy={arcPoints[0][1]} r={Math.hypot(arcPoints[1][0] - arcPoints[0][0], arcPoints[1][1] - arcPoints[0][1])} fill="none" stroke="#1595e6" strokeDasharray="5 3" />}</>}
+        {linePoints.length > 0 && <>{linePoints.length > 1 && <polyline points={linePoints.map((item) => item.join(',')).join(' ')} fill="none" stroke="#0875c9" strokeWidth="2" />}{tool === 'line' && hoverPoint && <line x1={linePoints.at(-1)![0]} y1={linePoints.at(-1)![1]} x2={hoverPoint[0]} y2={hoverPoint[1]} stroke="#1595e6" strokeWidth="2" strokeDasharray="5 3" />}{linePoints.map((item, index) => <g key={`${item[0]}-${item[1]}-${index}`}><circle cx={item[0]} cy={item[1]} r="4.5" fill={index === 0 ? '#d33' : '#0875c9'} />{index > 0 && <text x={(item[0] + linePoints[index - 1][0]) / 2} y={(item[1] + linePoints[index - 1][1]) / 2 - 7} className="sketch-dimension">{Math.hypot(item[0] - linePoints[index - 1][0], item[1] - linePoints[index - 1][1]).toFixed(1)} mm</text>}</g>)}</>}
+        {tool === 'rectangle' && <rect x={Math.min(preview.start[0], preview.end[0])} y={Math.min(preview.start[1], preview.end[1])} width={dx} height={dy} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />}
+        {tool === 'circle' && <circle cx={preview.start[0]} cy={preview.start[1]} r={Math.hypot(dx, dy)} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />}
         {tool === 'rectangle' && drag && <><text x={(preview.start[0] + preview.end[0]) / 2} y={Math.min(preview.start[1], preview.end[1]) - 5} className="sketch-dimension">{dx.toFixed(1)} mm</text><text x={Math.max(preview.start[0], preview.end[0]) + 5} y={(preview.start[1] + preview.end[1]) / 2} className="sketch-dimension">{dy.toFixed(1)} mm</text></>}
         {tool === 'circle' && drag && <text x={preview.start[0] + 6} y={preview.start[1] - 6} className="sketch-dimension">R {Math.hypot(dx, dy).toFixed(1)} mm</text>}
       </svg>
       {selectedSketchEntity && <aside className="sketch-property-manager">
-        <strong>{selectedSketchEntity.type === 'line' ? 'Line properties' : 'Entity properties'}</strong>
+        <strong>{selectedSketchEntity.type === 'line' ? 'Line properties' : selectedSketchEntity.type === 'circle' ? 'Circle properties' : 'Arc properties'}</strong>
         {selectedSketchEntity.type === 'line' && <label><span>Length (mm)</span><input type="number" min="0.01" step="0.01" value={Math.hypot(selectedSketchEntity.end[0] - selectedSketchEntity.start[0], selectedSketchEntity.end[1] - selectedSketchEntity.start[1]).toFixed(2)} onChange={(event) => updateLineLength(selectedSketchEntity, Number(event.target.value))} /></label>}
+        {(selectedSketchEntity.type === 'circle' || selectedSketchEntity.type === 'arc') && <>
+          <label><span>Radius (mm)</span><input type="number" min="0.01" step="0.01" value={selectedSketchEntity.radius.toFixed(2)} onChange={(event) => dispatchSketch({ type: 'updateEntity', entity: { ...selectedSketchEntity, radius: Math.max(0.01, Number(event.target.value)) } })} /></label>
+          <label><span>Diameter (mm)</span><input type="number" min="0.02" step="0.01" value={(selectedSketchEntity.radius * 2).toFixed(2)} onChange={(event) => dispatchSketch({ type: 'updateEntity', entity: { ...selectedSketchEntity, radius: Math.max(0.01, Number(event.target.value) / 2) } })} /></label>
+        </>}
         <label className="inline-check"><input type="checkbox" checked={selectedSketchEntity.construction === true} onChange={(event) => dispatchSketch({ type: 'updateEntity', entity: { ...selectedSketchEntity, construction: event.target.checked } })} /><span>For construction</span></label>
         <button type="button" onClick={() => dispatchSketch({ type: 'removeEntities', entityIds: [selectedSketchEntity.id] })}>Delete entity</button>
       </aside>}
@@ -1595,6 +1630,22 @@ function App() {
 
       <section className="workspace" id="workspace">
         <aside className="sidebar">
+          {activeTool === 'measure' && <section className="measure-manager" aria-label="Measure PropertyManager">
+            <header><strong>Measure</strong><button type="button" aria-label="Close Measure" onClick={() => setActiveTool('view')}>×</button></header>
+            <div className="measure-manager-tools">
+              {(['auto', 'point', 'edge', 'face'] as const).map((mode) => <button key={mode} className={measurementMode === mode ? 'selected' : ''} type="button" onClick={() => { setMeasurementMode(mode); setMeasurementSummary({ selections: [] }) }}>{mode === 'auto' ? 'Auto' : mode[0].toUpperCase() + mode.slice(1)}</button>)}
+            </div>
+            <div className="measure-manager-selection"><span>Selected entities</span>{measurementSummary.selections.length ? measurementSummary.selections.map((selection) => <strong key={selection}>{selection}</strong>) : <small>Select geometry in the graphics area</small>}</div>
+            <div className="measure-manager-results">
+              {measurementSummary.distance !== undefined && <div><span>Minimum distance</span><strong>{formatSignedMillimetres(measurementSummary.distance)}</strong></div>}
+              {measurementSummary.lineLength !== undefined && <div><span>Length</span><strong>{formatSignedMillimetres(measurementSummary.lineLength)}</strong></div>}
+              {measurementSummary.radius !== undefined && <><div><span>Radius</span><strong>{formatSignedMillimetres(measurementSummary.radius)}</strong></div><div><span>Diameter</span><strong>{formatSignedMillimetres(measurementSummary.diameter ?? 0)}</strong></div></>}
+              {measurementSummary.deltaX !== undefined && <><div><span>ΔX</span><strong>{formatSignedMillimetres(measurementSummary.deltaX)}</strong></div><div><span>ΔY</span><strong>{formatSignedMillimetres(measurementSummary.deltaY ?? 0)}</strong></div><div><span>ΔZ</span><strong>{formatSignedMillimetres(measurementSummary.deltaZ ?? 0)}</strong></div></>}
+              {measurementSummary.faceGap !== undefined && <div><span>Normal distance</span><strong>{formatSignedMillimetres(measurementSummary.faceGap)}</strong></div>}
+              {measurementSummary.faceAngle !== undefined && <div><span>Angle</span><strong>{measurementSummary.faceAngle.toFixed(2)}°</strong></div>}
+            </div>
+            <button type="button" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}>Clear selection</button>
+          </section>}
           <section className="model-tree" aria-labelledby="model-tree-title">
             <div className="model-tree-header">
               <span className="panel-label" id="model-tree-title">Model tree</span>
