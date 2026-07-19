@@ -12,6 +12,7 @@ import {
   importSTEP,
   drawCircle,
   drawRectangle,
+  exportSTEP,
   makeBox,
   makeCylinder,
   makeSphere,
@@ -38,6 +39,12 @@ import {
 
 import { getPrimitiveFileName, validateCadPrimitive, type CadPrimitive } from './primitive'
 import { getFeatureModelFileName, validateCadFeatureModel, type CadFeatureModel, type SketchExtrudeFeature } from './featureModel'
+import {
+  getExactCadDownloadName,
+  validateExactCadExportSize,
+  validateStepExportBlob,
+  type ExactCadExportFormat,
+} from './exactCadExport'
 
 import {
   createAsyncOperationQueue,
@@ -94,6 +101,7 @@ interface CreatePrimitiveRequest { id: string; action: 'createPrimitive'; primit
 interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId: string; primitive: CadPrimitive }
 interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureModel }
 interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
+interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
 
 type WorkerRequest =
   | ImportStepRequest
@@ -103,6 +111,7 @@ type WorkerRequest =
   | UpdatePrimitiveRequest
   | CreateFeatureModelRequest
   | UpdateFeatureModelRequest
+  | ExportExactCadRequest
   | DisposeBodyRequest
 
 interface ImportedBodyData {
@@ -131,9 +140,17 @@ interface DisposedBodyData {
   disposedBodyId: string
 }
 
+interface ExactCadExportData {
+  bodyId: string
+  format: ExactCadExportFormat
+  blob: Blob
+  fileName: string
+}
+
 type WorkerData =
   | ImportedBodyData
   | SerializedCadProject
+  | ExactCadExportData
   | DisposedBodyData
 
 interface WorkerSuccess {
@@ -802,6 +819,46 @@ async function updateFeatureModel(bodyId: string, featureModelInput: CadFeatureM
   }
 }
 
+async function exportExactCad(
+  bodyId: string,
+  format: ExactCadExportFormat,
+): Promise<ExactCadExportData> {
+  const shape = getBody(bodyId)
+  const sourceName = bodyFileNames.get(bodyId) ?? 'model.step'
+  let blob: Blob
+
+  if (format === 'step') {
+    blob = exportSTEP(
+      [{ shape, name: sourceName }],
+      { unit: 'MM', modelUnit: 'MM' },
+    )
+    await validateStepExportBlob(blob)
+  } else if (format === 'brep') {
+    const serializedShape = shape.serialize()
+    blob = new Blob([serializedShape], { type: 'application/octet-stream' })
+    validateExactCadExportSize(blob.size)
+
+    const restoredShape = deserializeShape(serializedShape).asShape3D()
+    try {
+      if (restoredShape.isNull) {
+        throw new Error('The generated BREP file does not contain valid exact geometry.')
+      }
+    } finally {
+      restoredShape.delete()
+    }
+  } else {
+    throw new Error('The requested exact CAD format is not supported.')
+  }
+
+  validateExactCadExportSize(blob.size)
+  return {
+    bodyId,
+    format,
+    blob,
+    fileName: getExactCadDownloadName(sourceName, format),
+  }
+}
+
 function registerBodyAfterMeshing(
   bodyId: string,
   fileName: string,
@@ -863,6 +920,9 @@ async function handleRequest(
 
     case 'updateFeatureModel':
       return updateFeatureModel(request.bodyId, request.featureModel)
+
+    case 'exportExactCad':
+      return exportExactCad(request.bodyId, request.format)
 
     case 'disposeBody':
       return disposeBody(

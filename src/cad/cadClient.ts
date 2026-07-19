@@ -1,5 +1,6 @@
 import type { CadPrimitive } from './primitive'
 import type { CadFeatureModel } from './featureModel'
+import type { ExactCadExportFormat } from './exactCadExport'
 
 export interface CadFaceMesh {
   vertices: number[] | Float32Array
@@ -73,6 +74,7 @@ interface CreatePrimitiveRequest { id: string; action: 'createPrimitive'; primit
 interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId: string; primitive: CadPrimitive }
 interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureModel }
 interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
+interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
 
 type WorkerRequest =
   | ImportStepRequest
@@ -82,15 +84,24 @@ type WorkerRequest =
   | UpdatePrimitiveRequest
   | CreateFeatureModelRequest
   | UpdateFeatureModelRequest
+  | ExportExactCadRequest
   | DisposeBodyRequest
 
 interface DisposedCadBody {
   disposedBodyId: string
 }
 
+export interface ExactCadExportFile {
+  bodyId: string
+  format: ExactCadExportFormat
+  blob: Blob
+  fileName: string
+}
+
 type WorkerData =
   | ImportedCadBody
   | SerializedCadProject
+  | ExactCadExportFile
   | DisposedCadBody
 
 interface WorkerSuccess {
@@ -303,6 +314,16 @@ export async function disposeCadBody(
   }
 }
 
+function isExactCadExportFile(data: WorkerData): data is ExactCadExportFile {
+  return (
+    'format' in data &&
+    (data.format === 'step' || data.format === 'brep') &&
+    data.blob instanceof Blob &&
+    typeof data.fileName === 'string' &&
+    typeof data.bodyId === 'string'
+  )
+}
+
 export async function createCadPrimitive(primitive: CadPrimitive): Promise<ImportedCadBody> {
   const response = await sendRequest({ id: crypto.randomUUID(), action: 'createPrimitive', primitive })
   if (!isImportedCadBody(response)) throw new Error('The CAD worker returned invalid primitive data.')
@@ -324,5 +345,21 @@ export async function createCadFeatureModel(featureModel: CadFeatureModel): Prom
 export async function updateCadFeatureModel(bodyId: string, featureModel: CadFeatureModel): Promise<ImportedCadBody> {
   const response = await sendRequest({ id: crypto.randomUUID(), action: 'updateFeatureModel', bodyId, featureModel })
   if (!isImportedCadBody(response)) throw new Error('The CAD worker returned invalid feature-model data.')
+  return response
+}
+
+export async function exportExactCadFile(
+  bodyId: string,
+  format: ExactCadExportFormat,
+): Promise<ExactCadExportFile> {
+  const response = await sendRequest({
+    id: crypto.randomUUID(),
+    action: 'exportExactCad',
+    bodyId,
+    format,
+  })
+  if (!isExactCadExportFile(response) || response.bodyId !== bodyId || response.format !== format) {
+    throw new Error('The CAD worker returned invalid exact export data.')
+  }
   return response
 }

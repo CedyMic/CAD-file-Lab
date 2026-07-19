@@ -16,6 +16,7 @@ import {
   disposeCadBody,
   createCadPrimitive,
   createCadFeatureModel,
+  exportExactCadFile,
   importStepFile,
   restoreCadProject,
   serializeCadProject,
@@ -82,6 +83,7 @@ import {
   convertTriangleMesh,
   type MeshExportFormat,
 } from './cad/meshConversion'
+import type { ExactCadExportFormat } from './cad/exactCadExport'
 
 type WorkspaceTool =
   | 'view'
@@ -98,6 +100,7 @@ type InformationPanel =
   | null
 
 type FileOpenIntent = 'view' | 'convert' | 'reduce'
+type ExportFormat = MeshExportFormat | ExactCadExportFormat
 
 const AUTOSAVE_INTERVAL =
   5 * 60 * 1000
@@ -139,7 +142,7 @@ const tools: Array<{
     id: 'convert',
     label: 'Convert',
     description:
-      'Download the open model in another mesh format',
+      'Download the open model in another 3D format',
     available: true,
   },
   {
@@ -543,7 +546,7 @@ function App() {
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(() => new Set())
   const [partColors, setPartColors] = useState<Map<string, string>>(() => new Map())
   const [partOpacities, setPartOpacities] = useState<Map<string, number>>(() => new Map())
-  const [exportFormat, setExportFormat] = useState<MeshExportFormat>('stl')
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('stl')
   const [exportRatio, setExportRatio] = useState(1)
   const [exportScope, setExportScope] = useState<'selected' | 'visible'>('visible')
   const [isExporting, setIsExporting] = useState(false)
@@ -614,11 +617,26 @@ function App() {
   const visibleParts = model?.renderParts.filter((part) => !hiddenPartIds.has(part.id)) ?? []
   const exportParts = exportScope === 'selected' ? selectedParts : visibleParts
 
-  function downloadConvertedMesh() {
-    if (!model || exportParts.length === 0) return
+  async function downloadConvertedModel() {
+    if (!model) return
+    const exactFormat = exportFormat === 'step' || exportFormat === 'brep'
+    if (!exactFormat && exportParts.length === 0) return
     setIsExporting(true)
     setError(null)
     try {
+      if (exactFormat) {
+        if (!model.editable) throw new Error('Exact CAD export requires an editable STEP/STP or locally created model.')
+        const exported = await exportExactCadFile(model.bodyId, exportFormat)
+        const url = URL.createObjectURL(exported.blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = exported.fileName
+        link.click()
+        URL.revokeObjectURL(url)
+        setStatus(`Downloaded exact ${exported.fileName}`)
+        return
+      }
+
       const vertices: number[] = []
       const triangles: number[] = []
       for (const part of exportParts) {
@@ -629,7 +647,7 @@ function App() {
       const converted = convertTriangleMesh(
         { vertices, triangles },
         {
-          format: exportFormat,
+          format: exportFormat as MeshExportFormat,
           reductionRatio: activeTool === 'simplify' ? exportRatio : 1,
           fileName: model.fileName,
         },
@@ -642,7 +660,7 @@ function App() {
       URL.revokeObjectURL(url)
       setStatus(`Downloaded ${converted.fileName} with ${converted.triangleCount.toLocaleString()} triangles`)
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'The mesh could not be converted.')
+      setError(caughtError instanceof Error ? caughtError.message : 'The model could not be exported.')
     } finally {
       setIsExporting(false)
     }
@@ -1651,7 +1669,7 @@ function App() {
           <div>
             <button className={activeTool === 'create' ? 'active' : ''} type="button" aria-pressed={activeTool === 'create'} onClick={() => setActiveTool('create')}><strong>Create</strong><span>New body</span></button>
             <button type="button" disabled><strong>Modify</strong><span>Geometry</span></button>
-            <button className={activeTool === 'simplify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'simplify'} disabled={!model} onClick={() => setActiveTool('simplify')}><strong>Simplify</strong><span>Reduce size</span></button>
+            <button className={activeTool === 'simplify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'simplify'} disabled={!model} onClick={() => { if (exportFormat === 'step' || exportFormat === 'brep') setExportFormat('stl'); setActiveTool('simplify') }}><strong>Simplify</strong><span>Reduce size</span></button>
           </div>
         </div>
 
@@ -2208,22 +2226,33 @@ function App() {
                 <section className="conversion-panel" aria-labelledby="conversion-title">
                   <span className="panel-label">{activeTool === 'simplify' ? 'Local model reduction' : 'Local format conversion'}</span>
                   <h3 id="conversion-title">{activeTool === 'simplify' ? 'Reduce file size' : 'Convert file'}</h3>
-                  <fieldset>
-                    <legend>Export</legend>
-                    <label title="Hidden bodies are excluded"><input type="radio" name="export-scope" checked={exportScope === 'visible'} onChange={() => setExportScope('visible')} /> Visible ({visibleParts.length})</label>
-                    <label title="Selected bodies are included even when hidden"><input type="radio" name="export-scope" checked={exportScope === 'selected'} onChange={() => setExportScope('selected')} /> Selected ({selectedParts.length})</label>
-                  </fieldset>
                   <label>
                     <span>Output format</span>
-                    <select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as MeshExportFormat)}>
-                      <option value="stl">STL (binary)</option>
-                      <option value="obj">OBJ</option>
-                      <option value="ply">PLY</option>
-                      <option value="glb">GLB</option>
-                      <option value="gltf">glTF (embedded)</option>
-                      <option value="3mf">3MF</option>
+                    <select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as ExportFormat)}>
+                      {activeTool === 'convert' && <optgroup label="Exact CAD geometry">
+                        <option value="step" disabled={!model.editable}>STEP (.step)</option>
+                        <option value="brep" disabled={!model.editable}>Open CASCADE BREP (.brep)</option>
+                      </optgroup>}
+                      <optgroup label="Triangle mesh">
+                        <option value="stl">STL (binary)</option>
+                        <option value="obj">OBJ</option>
+                        <option value="ply">PLY</option>
+                        <option value="glb">GLB</option>
+                        <option value="gltf">glTF (embedded)</option>
+                        <option value="3mf">3MF</option>
+                      </optgroup>
                     </select>
                   </label>
+                  {(exportFormat === 'step' || exportFormat === 'brep') ? (
+                    <div className="exact-export-note">
+                      <strong>Exact editable geometry</strong>
+                      <span>The complete model is exported locally without mesh reduction.</span>
+                    </div>
+                  ) : <fieldset>
+                    <legend>Export scope</legend>
+                    <label title="Hidden bodies are excluded"><input type="radio" name="export-scope" checked={exportScope === 'visible'} onChange={() => setExportScope('visible')} /> Visible ({visibleParts.length})</label>
+                    <label title="Selected bodies are included even when hidden"><input type="radio" name="export-scope" checked={exportScope === 'selected'} onChange={() => setExportScope('selected')} /> Selected ({selectedParts.length})</label>
+                  </fieldset>}
                   {activeTool === 'simplify' && (
                     <>
                       <label className="reduction-field">
@@ -2242,10 +2271,10 @@ function App() {
                       </div>
                     </>
                   )}
-                  <button className="primary-button" type="button" disabled={isExporting || exportParts.length === 0} onClick={downloadConvertedMesh}>
-                    {isExporting ? 'Converting…' : `Download ${exportFormat.toUpperCase()}`}
+                  <button className="primary-button" type="button" disabled={isExporting || ((exportFormat !== 'step' && exportFormat !== 'brep') && exportParts.length === 0)} onClick={() => { void downloadConvertedModel() }}>
+                    {isExporting ? 'Preparing…' : `Download ${exportFormat.toUpperCase()}`}
                   </button>
-                  {exportParts.length === 0 && <p className="conversion-warning">Choose at least one body for this export scope.</p>}
+                  {(exportFormat !== 'step' && exportFormat !== 'brep') && exportParts.length === 0 && <p className="conversion-warning">Choose at least one body for this export scope.</p>}
                   <small>Local only · Original unchanged</small>
                 </section>
               )}

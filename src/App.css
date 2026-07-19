@@ -1628,6 +1628,9 @@ textarea:focus-visible {
 .reduction-risk.medium { color: #ffe4a3; background: #493a18; border-color: #806521; }
 .reduction-risk.high { color: #ffd0cb; background: #4b2422; border-color: #8c4842; }
 .conversion-warning { padding: 9px; color: #ffe4a3 !important; background: #493a18; border: 1px solid #806521; border-radius: 7px; }
+.exact-export-note { display: grid; gap: 3px; padding: 8px; color: #c9d9e6; background: #203443; border: 1px solid #3e5a6d; border-radius: 5px; font-size: 10px; }
+.exact-export-note strong { color: #8fc5f4; }
+.exact-export-note span { line-height: 1.35; }
 
 .sketch-workflow { display: grid; gap: 10px; padding: 12px; border-bottom: 1px solid #395064; }
 .sketch-workflow p, .sketch-workflow small { margin: 0; color: #b8c9d9; font-size: 11px; line-height: 1.4; }

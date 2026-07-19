@@ -14,7 +14,8 @@ are not uploaded by the application.
   settings for browser-local save and reopen workflows.
 - Browser-local recovery is available and can be erased in the application.
 - Geometry Measure and non-destructive X/Y/Z section previews are available.
-  Exact modify operations and exact CAD-format export remain in development.
+  Editable models can be exported as exact STEP or Open CASCADE BREP files.
+  Exact modify operations remain in development.
 - The bundled OCCT kernel has a machine-verified provenance chain and public
   source/relinking offer. See [LEGAL_DISTRIBUTION.md](./LEGAL_DISTRIBUTION.md).
 
