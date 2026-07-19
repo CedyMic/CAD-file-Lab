@@ -86,6 +86,16 @@ test('preserves feature history metadata and rejects invalid histories', () => {
   expectInvalid(file)
 })
 
+test('preserves direct-edit history and rejects stale face references', () => {
+  const file = createValidProjectFile()
+  file.project.directEdits = [{
+    id: 'move-face-1', type: 'moveFace', mode: 'offset', name: 'Move Face1', faceId: 42, distance: -5,
+  }]
+  assert.deepEqual(parseCadLabProjectFile(JSON.stringify(file)).project.directEdits, file.project.directEdits)
+  file.project.directEdits[0].faceId = 0
+  expectInvalid(file)
+})
+
 test('rejects malformed JSON with a user-facing error', () => {
   assert.throws(
     () => parseCadLabProjectFile('{not-json'),

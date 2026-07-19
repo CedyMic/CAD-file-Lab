@@ -8,6 +8,7 @@ import { DOMParser as XmlDomParser } from '@xmldom/xmldom'
 
 import {
   deserializeShape,
+  basicFaceExtrusion,
   draw,
   importSTEP,
   drawCircle,
@@ -45,6 +46,12 @@ import {
   validateStepExportBlob,
   type ExactCadExportFormat,
 } from './exactCadExport'
+import {
+  createMoveFaceFeature,
+  validateDirectEditHistory,
+  validateFaceOffset,
+  type DirectEditFeature,
+} from './directEdit'
 
 import {
   createAsyncOperationQueue,
@@ -71,6 +78,7 @@ export interface SerializedCadProject {
   savedAt: number
   primitive?: CadPrimitive
   featureModel?: CadFeatureModel
+  directEdits?: DirectEditFeature[]
 }
 
 interface ImportStepRequest {
@@ -102,6 +110,7 @@ interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId
 interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureModel }
 interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
 interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
+interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; distance: number; preview: boolean }
 
 type WorkerRequest =
   | ImportStepRequest
@@ -112,6 +121,7 @@ type WorkerRequest =
   | CreateFeatureModelRequest
   | UpdateFeatureModelRequest
   | ExportExactCadRequest
+  | ModifyFaceOffsetRequest
   | DisposeBodyRequest
 
 interface ImportedBodyData {
@@ -134,6 +144,7 @@ interface ImportedBodyData {
   edges: ReturnType<CadShape['meshEdges']>
   primitive?: CadPrimitive
   featureModel?: CadFeatureModel
+  directEdits?: DirectEditFeature[]
 }
 
 interface DisposedBodyData {
@@ -188,6 +199,9 @@ const bodyPrimitives =
 
 const bodyFeatureModels =
   new Map<string, CadFeatureModel>()
+
+const bodyDirectEdits =
+  new Map<string, DirectEditFeature[]>()
 
 const enqueueCadOperation =
   createAsyncOperationQueue()
@@ -583,6 +597,7 @@ function serializeProject(
     savedAt: Date.now(),
     primitive: bodyPrimitives.get(bodyId),
     featureModel: bodyFeatureModels.get(bodyId),
+    directEdits: bodyDirectEdits.get(bodyId),
   }
 }
 
@@ -654,7 +669,9 @@ async function restoreProject(
     ? validateCadFeatureModel(project.featureModel)
     : undefined
   if (featureModel) bodyFeatureModels.set(project.bodyId, featureModel)
-  return { ...body, ...(primitive ? { primitive } : {}), ...(featureModel ? { featureModel } : {}) }
+  const directEdits = validateDirectEditHistory(project.directEdits)
+  if (directEdits?.length) bodyDirectEdits.set(project.bodyId, directEdits)
+  return { ...body, ...(primitive ? { primitive } : {}), ...(featureModel ? { featureModel } : {}), ...(directEdits?.length ? { directEdits } : {}) }
 }
 
 function disposeBody(
@@ -669,6 +686,7 @@ function disposeBody(
     bodyFileNames.delete(bodyId)
     bodyPrimitives.delete(bodyId)
     bodyFeatureModels.delete(bodyId)
+    bodyDirectEdits.delete(bodyId)
   }
 
   return {
@@ -819,6 +837,102 @@ async function updateFeatureModel(bodyId: string, featureModelInput: CadFeatureM
   }
 }
 
+function buildPlanarFaceOffset(
+  shape: CadShape,
+  faceId: number,
+  distanceInput: number,
+): CadShape {
+  const distance = validateFaceOffset(distanceInput)
+  const faces = shape.faces
+  const selectedFace = faces.find((face) => face.hashCode === faceId)
+  if (!selectedFace) {
+    faces.forEach((face) => face.delete())
+    throw new Error('The selected face is no longer available. Select the face again.')
+  }
+  if (selectedFace.geomType !== 'PLANE') {
+    faces.forEach((face) => face.delete())
+    throw new Error('This Move Face milestone supports planar faces. Cylindrical and curved offsets are coming next.')
+  }
+
+  const rawNormal = selectedFace.normalAt()
+  const orientedNormal = rawNormal.multiply(selectedFace.orientation === 'backward' ? -1 : 1)
+  const unitNormal = orientedNormal.normalized()
+  const extrusionVector = unitNormal.multiply(distance)
+  let tool: Solid | null = null
+  let result: CadShape | null = null
+
+  try {
+    tool = basicFaceExtrusion(selectedFace, extrusionVector)
+    const solidShape = shape.asShape3D()
+    result = (distance > 0
+      ? solidShape.fuse(tool, { optimisation: 'commonFace' })
+      : solidShape.cut(tool, { optimisation: 'commonFace' })) as CadShape
+    result.simplify()
+    const resultFaces = result.faces
+    const hasFaces = resultFaces.length > 0
+    resultFaces.forEach((face) => face.delete())
+    if (result.isNull || !hasFaces) {
+      throw new Error('Move Face would remove all valid solid geometry.')
+    }
+    return result
+  } catch (error) {
+    result?.delete()
+    throw error
+  } finally {
+    tool?.delete()
+    extrusionVector.delete()
+    unitNormal.delete()
+    orientedNormal.delete()
+    rawNormal.delete()
+    faces.forEach((face) => face.delete())
+  }
+}
+
+async function modifyFaceOffset(
+  bodyId: string,
+  faceId: number,
+  distance: number,
+  preview: boolean,
+): Promise<ImportedBodyData> {
+  const currentShape = getBody(bodyId)
+  const replacement = buildPlanarFaceOffset(currentShape, faceId, distance)
+  const fileName = bodyFileNames.get(bodyId) ?? 'Modified model.step'
+  const history = bodyDirectEdits.get(bodyId) ?? []
+
+  if (preview) {
+    try {
+      return {
+        ...createRenderData(bodyId, fileName, replacement),
+        primitive: bodyPrimitives.get(bodyId),
+        featureModel: bodyFeatureModels.get(bodyId),
+        directEdits: history,
+      }
+    } finally {
+      replacement.delete()
+    }
+  }
+
+  try {
+    const renderData = createRenderData(bodyId, fileName, replacement)
+    const nextHistory = [
+      ...history,
+      createMoveFaceFeature(faceId, distance, history.length + 1),
+    ]
+    bodies.set(bodyId, replacement)
+    bodyDirectEdits.set(bodyId, nextHistory)
+    currentShape.delete()
+    return {
+      ...renderData,
+      primitive: bodyPrimitives.get(bodyId),
+      featureModel: bodyFeatureModels.get(bodyId),
+      directEdits: nextHistory,
+    }
+  } catch (error) {
+    replacement.delete()
+    throw error
+  }
+}
+
 async function exportExactCad(
   bodyId: string,
   format: ExactCadExportFormat,
@@ -923,6 +1037,9 @@ async function handleRequest(
 
     case 'exportExactCad':
       return exportExactCad(request.bodyId, request.format)
+
+    case 'modifyFaceOffset':
+      return modifyFaceOffset(request.bodyId, request.faceId, request.distance, request.preview)
 
     case 'disposeBody':
       return disposeBody(

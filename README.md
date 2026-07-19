@@ -15,7 +15,7 @@ are not uploaded by the application.
 - Browser-local recovery is available and can be erased in the application.
 - Geometry Measure and non-destructive X/Y/Z section previews are available.
   Editable models can be exported as exact STEP or Open CASCADE BREP files.
-  Exact modify operations remain in development.
+  Exact planar Move Face offset is available for editable models. Translate, rotate, and curved-face offsets remain in development.
 - The bundled OCCT kernel has a machine-verified provenance chain and public
   source/relinking offer. See [LEGAL_DISTRIBUTION.md](./LEGAL_DISTRIBUTION.md).
 

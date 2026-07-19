@@ -3,6 +3,7 @@ import type {
 } from './cadClient'
 import { validateCadPrimitive } from './primitive.ts'
 import { validateCadFeatureModel } from './featureModel.ts'
+import { validateDirectEditHistory } from './directEdit.ts'
 
 import type {
   DisplaySettings,
@@ -118,6 +119,7 @@ function isSerializedProject(
   try {
     if (value.primitive !== undefined) validateCadPrimitive(value.primitive as never)
     if (value.featureModel !== undefined) validateCadFeatureModel(value.featureModel as never)
+    if (value.directEdits !== undefined) validateDirectEditHistory(value.directEdits as never)
     return true
   } catch { return false }
 }

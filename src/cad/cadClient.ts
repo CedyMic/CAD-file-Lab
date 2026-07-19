@@ -1,6 +1,7 @@
 import type { CadPrimitive } from './primitive'
 import type { CadFeatureModel } from './featureModel'
 import type { ExactCadExportFormat } from './exactCadExport'
+import type { DirectEditFeature } from './directEdit'
 
 export interface CadFaceMesh {
   vertices: number[] | Float32Array
@@ -34,6 +35,7 @@ export interface ImportedCadBody {
   edges: CadEdgeMesh
   primitive?: CadPrimitive
   featureModel?: CadFeatureModel
+  directEdits?: DirectEditFeature[]
 }
 
 export interface SerializedCadProject {
@@ -44,6 +46,7 @@ export interface SerializedCadProject {
   savedAt: number
   primitive?: CadPrimitive
   featureModel?: CadFeatureModel
+  directEdits?: DirectEditFeature[]
 }
 
 interface ImportStepRequest {
@@ -75,6 +78,7 @@ interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId
 interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureModel }
 interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
 interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
+interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; distance: number; preview: boolean }
 
 type WorkerRequest =
   | ImportStepRequest
@@ -85,6 +89,7 @@ type WorkerRequest =
   | CreateFeatureModelRequest
   | UpdateFeatureModelRequest
   | ExportExactCadRequest
+  | ModifyFaceOffsetRequest
   | DisposeBodyRequest
 
 interface DisposedCadBody {
@@ -360,6 +365,26 @@ export async function exportExactCadFile(
   })
   if (!isExactCadExportFile(response) || response.bodyId !== bodyId || response.format !== format) {
     throw new Error('The CAD worker returned invalid exact export data.')
+  }
+  return response
+}
+
+export async function modifyCadFaceOffset(
+  bodyId: string,
+  faceId: number,
+  distance: number,
+  preview = false,
+): Promise<ImportedCadBody> {
+  const response = await sendRequest({
+    id: crypto.randomUUID(),
+    action: 'modifyFaceOffset',
+    bodyId,
+    faceId,
+    distance,
+    preview,
+  })
+  if (!isImportedCadBody(response) || response.bodyId !== bodyId) {
+    throw new Error('The CAD worker returned invalid Move Face data.')
   }
   return response
 }

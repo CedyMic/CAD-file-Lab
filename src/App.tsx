@@ -17,6 +17,7 @@ import {
   createCadPrimitive,
   createCadFeatureModel,
   exportExactCadFile,
+  modifyCadFaceOffset,
   importStepFile,
   restoreCadProject,
   serializeCadProject,
@@ -56,6 +57,7 @@ import {
   CadViewport,
   type MeasurementSummary,
   type MeasurementMode,
+  type ModifyFaceSelection,
   type ViewCommand,
   type ViewCommandType,
 } from './viewer/CadViewport'
@@ -135,8 +137,8 @@ const tools: Array<{
     id: 'modify',
     label: 'Modify',
     description:
-      'Fillet, chamfer and edit selected geometry',
-    available: false,
+      'Offset selected planar faces with exact dimensions',
+    available: true,
   },
   {
     id: 'convert',
@@ -541,6 +543,11 @@ function App() {
   const [measurementSummary, setMeasurementSummary] = useState<MeasurementSummary>({ selections: [] })
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>('auto')
   const [sectionSettings, setSectionSettings] = useState<SectionSettings>(defaultSectionSettings)
+  const [modifyFaceSelection, setModifyFaceSelection] = useState<ModifyFaceSelection | null>(null)
+  const [modifyDistance, setModifyDistance] = useState(5)
+  const [modifyPreview, setModifyPreview] = useState<ImportedCadBody | null>(null)
+  const [modifyError, setModifyError] = useState<string | null>(null)
+  const [isModifying, setIsModifying] = useState(false)
 
   const [selectedPartIds, setSelectedPartIds] = useState<Set<string>>(() => new Set())
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(() => new Set())
@@ -616,6 +623,48 @@ function App() {
   }, [model, selectedPart])
   const visibleParts = model?.renderParts.filter((part) => !hiddenPartIds.has(part.id)) ?? []
   const exportParts = exportScope === 'selected' ? selectedParts : visibleParts
+  const displayedModel = activeTool === 'modify' && modifyPreview && modifyFaceSelection && Number.isFinite(modifyDistance) && modifyDistance !== 0 ? modifyPreview : model
+
+  useEffect(() => {
+    if (activeTool !== 'modify' || !model?.editable || !modifyFaceSelection || !Number.isFinite(modifyDistance) || modifyDistance === 0) {
+      return
+    }
+    let cancelled = false
+    const timeout = window.setTimeout(() => {
+      void modifyCadFaceOffset(model.bodyId, modifyFaceSelection.faceId, modifyDistance, true)
+        .then((preview) => {
+          if (cancelled) return
+          setModifyPreview(preview)
+          setModifyError(null)
+        })
+        .catch((caughtError: unknown) => {
+          if (cancelled) return
+          setModifyPreview(null)
+          setModifyError(caughtError instanceof Error ? caughtError.message : 'Move Face preview failed.')
+        })
+    }, 180)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [activeTool, model, modifyDistance, modifyFaceSelection])
+
+  async function applyMoveFace() {
+    if (!model?.editable || !modifyFaceSelection) return
+    setIsModifying(true)
+    setModifyError(null)
+    try {
+      const modified = await modifyCadFaceOffset(model.bodyId, modifyFaceSelection.faceId, modifyDistance)
+      installModel(modified)
+      setModifyFaceSelection(null)
+      setModifyPreview(null)
+      setStatus(`${modified.directEdits?.at(-1)?.name ?? 'Move Face'} applied locally`)
+    } catch (caughtError) {
+      setModifyError(caughtError instanceof Error ? caughtError.message : 'Move Face could not be applied.')
+    } finally {
+      setIsModifying(false)
+    }
+  }
 
   async function downloadConvertedModel() {
     if (!model) return
@@ -670,6 +719,9 @@ function App() {
     function handleWorkspaceShortcuts(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setSelectedPartIds(new Set())
+        setModifyFaceSelection(null)
+        setModifyPreview(null)
+        setModifyError(null)
         return
       }
 
@@ -688,6 +740,9 @@ function App() {
 
   function installModel(nextModel: ImportedCadBody) {
     setModel(nextModel)
+    setModifyPreview(null)
+    setModifyFaceSelection(null)
+    setModifyError(null)
     setSelectedPartIds(new Set(nextModel.renderParts[0] ? [nextModel.renderParts[0].id] : []))
     setHiddenPartIds(new Set())
     setPartColors(new Map())
@@ -1668,7 +1723,7 @@ function App() {
           <span className="ribbon-group-label">Model</span>
           <div>
             <button className={activeTool === 'create' ? 'active' : ''} type="button" aria-pressed={activeTool === 'create'} onClick={() => setActiveTool('create')}><strong>Create</strong><span>New body</span></button>
-            <button type="button" disabled><strong>Modify</strong><span>Geometry</span></button>
+            <button className={activeTool === 'modify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'modify'} disabled={!model?.editable} onClick={() => { setSelectedPartIds(new Set()); setModifyFaceSelection(null); setModifyPreview(null); setModifyError(null); setActiveTool('modify') }} title="Directly edit exact CAD faces"><strong>Modify</strong><span>Move face</span></button>
             <button className={activeTool === 'simplify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'simplify'} disabled={!model} onClick={() => { if (exportFormat === 'step' || exportFormat === 'brep') setExportFormat('stl'); setActiveTool('simplify') }}><strong>Simplify</strong><span>Reduce size</span></button>
           </div>
         </div>
@@ -1681,7 +1736,7 @@ function App() {
         </div>
       </nav>
 
-      <section className={`workspace${activeTool === 'measure' ? ' measure-mode' : activeTool === 'section' ? ' section-mode' : ''}`} id="workspace">
+      <section className={`workspace${activeTool === 'measure' ? ' measure-mode' : activeTool === 'section' ? ' section-mode' : activeTool === 'modify' ? ' modify-mode' : ''}`} id="workspace">
         <aside className="sidebar">
           {activeTool === 'measure' && <section className="measure-manager" aria-label="Measure PropertyManager">
             <header><strong>Measure</strong><button type="button" aria-label="Close Measure" onClick={() => setActiveTool('view')}>×</button></header>
@@ -1707,6 +1762,32 @@ function App() {
               <small>Calculated from the displayed mesh.</small>
             </div>}
             <button type="button" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}>Clear selection</button>
+          </section>}
+          {activeTool === 'modify' && <section className="modify-manager" aria-label="Move Face PropertyManager">
+            <header>
+              <strong>Move Face</strong>
+              <span>
+                <button type="button" aria-label="Apply Move Face" title="Apply" disabled={!modifyFaceSelection || !modifyPreview || isModifying} onClick={() => { void applyMoveFace() }}>✓</button>
+                <button type="button" aria-label="Cancel Move Face" title="Cancel" onClick={() => { setModifyFaceSelection(null); setModifyPreview(null); setModifyError(null); setActiveTool('view') }}>×</button>
+              </span>
+            </header>
+            <div className="modify-mode-tabs" role="toolbar" aria-label="Move Face mode">
+              <button className="selected" type="button">Offset</button>
+              <button type="button" disabled title="Planned exact operation">Translate</button>
+              <button type="button" disabled title="Planned exact operation">Rotate</button>
+            </div>
+            <label className="modify-selection-field">
+              <span>Face to move</span>
+              <output>{modifyFaceSelection ? `Face ${modifyFaceSelection.faceId}` : 'Select a planar face in the graphics area'}</output>
+            </label>
+            <label>
+              <span>Distance (mm)</span>
+              <input type="number" step="0.1" value={Math.abs(modifyDistance)} onChange={(event) => setModifyDistance((modifyDistance < 0 ? -1 : 1) * Math.abs(Number(event.target.value)))} />
+            </label>
+            <label className="modify-reverse-field"><input type="checkbox" checked={modifyDistance < 0} onChange={(event) => setModifyDistance(Math.abs(modifyDistance || 5) * (event.target.checked ? -1 : 1))} /><span>Reverse direction</span></label>
+            <small>Positive offsets add material; reversed offsets remove material. Planar faces only in this milestone.</small>
+            {modifyFaceSelection && !modifyError && <p className="modify-preview-status">Live preview {modifyPreview ? 'ready' : 'updating…'}</p>}
+            {modifyError && <p className="modify-manager-error" role="alert">{modifyError}</p>}
           </section>}
           {activeTool === 'section' && <section className="section-manager" aria-label="Section PropertyManager">
             <header><strong>Section view</strong><button type="button" aria-label="Close Section" onClick={() => setActiveTool('view')}>×</button></header>
@@ -1756,6 +1837,9 @@ function App() {
                     <div className="feature-tree-feature"><span aria-hidden="true">▰</span><strong>{feature.name}</strong><small>{feature.operation === 'boss' ? 'Boss-Extrude' : 'Cut-Extrude'}</small></div>
                   </li>)}
                 </>}
+                {model?.directEdits?.map((feature) => <li className="feature-tree-feature direct-edit-feature" key={feature.id}>
+                  <span aria-hidden="true">↕</span><strong>{feature.name}</strong><small>Offset {feature.distance.toFixed(2)} mm</small>
+                </li>)}
                 {model?.bodySummaries.map((body) => (
                   <li
                     className={`model-tree-body${selectedPartIds.has(body.id) ? ' selected' : ''}${hiddenPartIds.has(body.id) ? ' hidden' : ''}`}
@@ -1994,7 +2078,7 @@ function App() {
             {activeTool === 'create' && createMode === 'features' ? (
               <SketchCreator model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} />
             ) : <CadViewport
-              model={model}
+              model={displayedModel}
               settings={
                 displaySettings
               }
@@ -2003,14 +2087,17 @@ function App() {
                 viewCommand
               }
               hiddenPartIds={hiddenPartIds}
-              selectedPartIds={activeTool === 'measure' ? new Set<string>() : selectedPartIds}
+              selectedPartIds={activeTool === 'measure' || activeTool === 'modify' ? new Set<string>() : selectedPartIds}
               partColors={partColors}
               partOpacities={partOpacities}
               measurementEnabled={activeTool === 'measure'}
               measurementMode={measurementMode}
               onMeasurementChange={setMeasurementSummary}
               onSelectPart={selectPart}
-              onClearSelection={() => setSelectedPartIds(new Set())}
+              modifyFaceSelection={activeTool === 'modify' ? modifyFaceSelection : null}
+              modifyPreviewOffset={activeTool === 'modify' && modifyPreview ? modifyDistance : 0}
+              onModifyFaceSelect={activeTool === 'modify' ? (selection) => { setModifyFaceSelection(selection); setModifyPreview(null); setModifyError(null) } : undefined}
+              onClearSelection={() => { setSelectedPartIds(new Set()); setModifyFaceSelection(null); setModifyPreview(null); setModifyError(null) }}
             />}
 
             {error && (

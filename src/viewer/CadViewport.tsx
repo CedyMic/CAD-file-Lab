@@ -70,6 +70,17 @@ interface CadViewportProps {
   measurementEnabled?: boolean
   onMeasurementChange?: (summary: MeasurementSummary) => void
   measurementMode?: MeasurementMode
+  modifyFaceSelection?: ModifyFaceSelection | null
+  onModifyFaceSelect?: (selection: ModifyFaceSelection) => void
+  modifyPreviewOffset?: number
+}
+
+export interface ModifyFaceSelection {
+  partId: string
+  faceId: number
+  point: MeasurementPoint
+  normal: MeasurementPoint
+  surfaceTriangles: MeasurementPoint[]
 }
 
 export type MeasurementMode = 'auto' | 'point' | 'face' | 'edge'
@@ -242,6 +253,7 @@ function ImportedPart({
   onSelect,
   onMeasurePoint,
   onMeasureLine,
+  onModifyFaceSelect,
   measurementMode,
 }: {
   part: CadRenderPart
@@ -254,6 +266,7 @@ function ImportedPart({
   onSelect: (additive: boolean) => void
   onMeasurePoint?: (sample: FaceSample) => void
   onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number, entityId: string) => void
+  onModifyFaceSelect?: (selection: ModifyFaceSelection) => void
   measurementMode: MeasurementMode
 }) {
   const faceGeometry =
@@ -362,6 +375,31 @@ function ImportedPart({
         geometry={faceGeometry}
         onClick={(event) => {
           event.stopPropagation()
+          const triangleOffset = (event.faceIndex ?? -1) * 3
+          const faceGroup = part.faces.faceGroups?.find((group) => (
+            triangleOffset >= group.start && triangleOffset < group.start + group.count
+          ))
+          if (onModifyFaceSelect) {
+            const normal = event.face?.normal.clone()
+            if (!faceGroup || !normal) return
+            normal.applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(event.object.matrixWorld))
+            const geometryIndex = faceGeometry.getIndex()
+            const positions = faceGeometry.getAttribute('position')
+            const surfaceTriangles: MeasurementPoint[] = []
+            for (let offset = faceGroup.start; offset < faceGroup.start + faceGroup.count; offset += 1) {
+              const vertexIndex = geometryIndex ? geometryIndex.getX(offset) : offset
+              const vertex = new THREE.Vector3().fromBufferAttribute(positions, vertexIndex).applyMatrix4(event.object.matrixWorld)
+              surfaceTriangles.push([vertex.x, vertex.y, vertex.z])
+            }
+            onModifyFaceSelect({
+              partId: part.id,
+              faceId: faceGroup.faceId,
+              point: [event.point.x, event.point.y, event.point.z],
+              normal: [normal.x, normal.y, normal.z],
+              surfaceTriangles,
+            })
+            return
+          }
           if (onMeasurePoint) {
             if (measurementMode === 'edge') return
             const normal = event.face?.normal.clone()
@@ -374,10 +412,6 @@ function ImportedPart({
                   return [vertex.x, vertex.y, vertex.z] as MeasurementPoint
                 }) as [MeasurementPoint, MeasurementPoint, MeasurementPoint])
               : undefined
-            const triangleOffset = (event.faceIndex ?? -1) * 3
-            const faceGroup = part.faces.faceGroups?.find((group) => (
-              triangleOffset >= group.start && triangleOffset < group.start + group.count
-            ))
             const surfaceTriangles: MeasurementPoint[] = []
             if (faceGroup) {
               const geometryIndex = faceGeometry.getIndex()
@@ -480,6 +514,7 @@ function ImportedModel({
   onSelectPart,
   onMeasurePoint,
   onMeasureLine,
+  onModifyFaceSelect,
   measurementMode,
   modelPosition,
   sectionPlane,
@@ -493,6 +528,7 @@ function ImportedModel({
   onSelectPart: (partId: string, additive: boolean) => void
   onMeasurePoint?: (sample: FaceSample) => void
   onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number, entityId: string) => void
+  onModifyFaceSelect?: (selection: ModifyFaceSelection) => void
   measurementMode: MeasurementMode
   modelPosition: THREE.Vector3
   sectionPlane: THREE.Plane | null
@@ -513,6 +549,7 @@ function ImportedModel({
             onSelect={(additive) => onSelectPart(part.id, additive)}
             onMeasurePoint={onMeasurePoint}
             onMeasureLine={onMeasureLine}
+            onModifyFaceSelect={onModifyFaceSelect}
             measurementMode={measurementMode}
           />
         )
@@ -577,6 +614,15 @@ function DistanceAnnotation({
       )}
     </group>
   )
+}
+
+function ModifyFaceHighlight({ selection, offset }: { selection: ModifyFaceSelection; offset: number }) {
+  const [nx, ny, nz] = selection.normal
+  const positions = new Float32Array(selection.surfaceTriangles.flatMap(([x, y, z]) => [x + nx * offset, y + ny * offset, z + nz * offset]))
+  return <mesh renderOrder={24}>
+    <bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry>
+    <meshBasicMaterial color="#ffb21c" transparent opacity={0.5} depthTest={false} side={THREE.DoubleSide} />
+  </mesh>
 }
 
 function MeasurableImportedModel({
@@ -940,6 +986,9 @@ export function CadViewport({
   measurementEnabled = false,
   onMeasurementChange,
   measurementMode = 'auto',
+  modifyFaceSelection = null,
+  onModifyFaceSelect,
+  modifyPreviewOffset = 0,
 }: CadViewportProps) {
   const [measurementResetId, setMeasurementResetId] = useState(0)
   const lightStrength =
@@ -1108,6 +1157,7 @@ export function CadViewport({
               partColors={partColors}
               partOpacities={partOpacities}
               onSelectPart={onSelectPart}
+              onModifyFaceSelect={onModifyFaceSelect}
               modelPosition={modelPosition}
               sectionPlane={sectionPlane}
             />
@@ -1121,6 +1171,7 @@ export function CadViewport({
             resolution={512}
             color="#05090d"
           />}
+          {modifyFaceSelection && <ModifyFaceHighlight selection={modifyFaceSelection} offset={modifyPreviewOffset} />}
         </>
       ) : (
         <TestModel
