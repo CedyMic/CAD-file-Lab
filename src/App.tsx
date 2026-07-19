@@ -121,7 +121,7 @@ const tools: Array<{
     id: 'measure',
     label: 'Measure',
     description:
-      'Click two model points to measure distance',
+      'Select points, edges, or faces to inspect dimensions',
     available: true,
   },
   {
@@ -1623,11 +1623,11 @@ function App() {
         <div className="ribbon-group">
           <span className="ribbon-group-label">Inspect</span>
           <div>
-            <button className="active" type="button" onClick={() => setActiveTool('view')}>
+            <button className={activeTool === 'view' ? 'active' : ''} type="button" aria-pressed={activeTool === 'view'} onClick={() => setActiveTool('view')}>
               <strong>View</strong><span>Navigate</span>
             </button>
-            <button type="button" disabled={!model} onClick={() => { setSelectedPartIds(new Set()); setActiveTool('measure') }} title="Open measurement tools">
-              <strong>Measure</strong><span>Planned</span>
+            <button className={activeTool === 'measure' ? 'active' : ''} type="button" aria-pressed={activeTool === 'measure'} disabled={!model} onClick={() => { setSelectedPartIds(new Set()); setActiveTool('measure') }} title="Open measurement tools">
+              <strong>Measure</strong><span>Inspect geometry</span>
             </button>
             <button type="button" disabled title="Section view is in development">
               <strong>Section</strong><span>Planned</span>
@@ -1638,21 +1638,21 @@ function App() {
         <div className="ribbon-group">
           <span className="ribbon-group-label">Model</span>
           <div>
-            <button type="button" onClick={() => setActiveTool('create')}><strong>Create</strong><span>New body</span></button>
+            <button className={activeTool === 'create' ? 'active' : ''} type="button" aria-pressed={activeTool === 'create'} onClick={() => setActiveTool('create')}><strong>Create</strong><span>New body</span></button>
             <button type="button" disabled><strong>Modify</strong><span>Geometry</span></button>
-            <button type="button" disabled={!model} onClick={() => setActiveTool('simplify')}><strong>Simplify</strong><span>Reduce size</span></button>
+            <button className={activeTool === 'simplify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'simplify'} disabled={!model} onClick={() => setActiveTool('simplify')}><strong>Simplify</strong><span>Reduce size</span></button>
           </div>
         </div>
 
         <div className="ribbon-group">
           <span className="ribbon-group-label">Output</span>
           <div>
-            <button type="button" disabled={!model} onClick={() => setActiveTool('convert')}><strong>Convert / Export</strong><span>Choose format</span></button>
+            <button className={activeTool === 'convert' ? 'active' : ''} type="button" aria-pressed={activeTool === 'convert'} disabled={!model} onClick={() => setActiveTool('convert')}><strong>Convert / Export</strong><span>Choose format</span></button>
           </div>
         </div>
       </nav>
 
-      <section className="workspace" id="workspace">
+      <section className={`workspace${activeTool === 'measure' ? ' measure-mode' : ''}`} id="workspace">
         <aside className="sidebar">
           {activeTool === 'measure' && <section className="measure-manager" aria-label="Measure PropertyManager">
             <header><strong>Measure</strong><button type="button" aria-label="Close Measure" onClick={() => setActiveTool('view')}>×</button></header>
@@ -1668,6 +1668,15 @@ function App() {
               {measurementSummary.faceGap !== undefined && <div><span>Normal distance</span><strong>{formatSignedMillimetres(measurementSummary.faceGap)}</strong></div>}
               {measurementSummary.faceAngle !== undefined && <div><span>Angle</span><strong>{measurementSummary.faceAngle.toFixed(2)}°</strong></div>}
             </div>
+            {measuredProperties && <div className="measure-manager-properties">
+              <span>Geometry properties</span>
+              <div><span>Scope</span><strong>{selectedPart?.name ?? 'Whole model'}</strong></div>
+              <div><span>Surface area</span><strong>{formatAreaMm2(measuredProperties.surfaceAreaMm2)}</strong></div>
+              <div><span>Enclosed volume</span><strong>{measuredProperties.enclosedVolumeMm3 === null
+                ? 'Unavailable · open mesh'
+                : formatVolumeMm3(measuredProperties.enclosedVolumeMm3)}</strong></div>
+              <small>Calculated from the displayed mesh.</small>
+            </div>}
             <button type="button" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}>Clear selection</button>
           </section>}
           <section className="model-tree" aria-labelledby="model-tree-title">
@@ -1921,20 +1930,6 @@ function App() {
             </div>
           </div>
 
-          {activeTool === 'measure' && <nav className="measure-commandbar" aria-label="Measure commands">
-            <div><span>Selection filter</span>
-              <button className={measurementMode === 'auto' ? 'selected' : ''} type="button" onClick={() => setMeasurementMode('auto')}>Auto</button>
-              <button className={measurementMode === 'point' ? 'selected' : ''} type="button" onClick={() => setMeasurementMode('point')}>Point</button>
-              <button className={measurementMode === 'edge' ? 'selected' : ''} type="button" onClick={() => setMeasurementMode('edge')}>Edge</button>
-              <button className={measurementMode === 'face' ? 'selected' : ''} type="button" onClick={() => setMeasurementMode('face')}>Face</button>
-            </div>
-            <div><span>Results</span>
-              <button type="button" disabled>XYZ</button><button type="button" disabled>Angle</button><button type="button" disabled>Radius / Ø</button>
-              <button type="button" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}>Clear</button>
-            </div>
-            <small>Select one or two entities. Minimum distance and available dimensions update in Properties.</small>
-          </nav>}
-
           <div
             className={`viewport-placeholder ${activeTool === 'create' && createMode === 'features' ? 'sketch-mode' : ''}`}
             onDragOver={(event) => {
@@ -2179,42 +2174,6 @@ function App() {
 
           {model ? (
             <>
-              {activeTool === 'measure' && measuredProperties && (
-                <section className="measurement-properties">
-                  <span className="panel-label">Measure</span>
-                  <label className="measurement-mode-field">
-                    <span>Method</span>
-                    <select value={measurementMode} onChange={(event) => {
-                      setMeasurementMode(event.target.value as MeasurementMode)
-                      setMeasurementSummary({ selections: [] })
-                    }}>
-                      <option value="auto">Auto select</option>
-                      <option value="point">Point to point</option>
-                      <option value="face">Face / Plane</option>
-                      <option value="edge">Edge / Line</option>
-                    </select>
-                  </label>
-                  <div className="measurement-selection-list">
-                    <span>Selected</span>
-                    <strong>{measurementSummary.selections.length
-                      ? measurementSummary.selections.join(' · ')
-                      : 'Select a face, line, or two points'}</strong>
-                  </div>
-                  {measurementSummary.distance !== undefined && <div><span>Minimum distance</span><strong>{formatSignedMillimetres(measurementSummary.distance)}</strong></div>}
-                  {measurementSummary.lineLength !== undefined && <div><span>Line length</span><strong>{formatSignedMillimetres(measurementSummary.lineLength)}</strong></div>}
-                  {measurementSummary.radius !== undefined && <div><span>Radius / Diameter</span><strong>{formatSignedMillimetres(measurementSummary.radius)} / {formatSignedMillimetres(measurementSummary.diameter ?? 0)}</strong></div>}
-                  {measurementSummary.deltaX !== undefined && <div><span>ΔX / ΔY / ΔZ</span><strong>{formatSignedMillimetres(measurementSummary.deltaX)} / {formatSignedMillimetres(measurementSummary.deltaY ?? 0)} / {formatSignedMillimetres(measurementSummary.deltaZ ?? 0)}</strong></div>}
-                  {measurementSummary.faceGap !== undefined && <div><span>Normal face gap</span><strong>{formatSignedMillimetres(measurementSummary.faceGap)}</strong></div>}
-                  {measurementSummary.faceAngle !== undefined && <div><span>Face angle</span><strong>{measurementSummary.faceAngle.toFixed(2)}°</strong></div>}
-                  <span className="panel-label">Mesh properties</span>
-                  <div><span>Scope</span><strong>{selectedPart?.name ?? 'Whole model'}</strong></div>
-                  <div><span>Surface area</span><strong>{formatAreaMm2(measuredProperties.surfaceAreaMm2)}</strong></div>
-                  <div><span>Enclosed volume</span><strong>{measuredProperties.enclosedVolumeMm3 === null
-                    ? 'Unavailable · open mesh'
-                    : formatVolumeMm3(measuredProperties.enclosedVolumeMm3)}</strong></div>
-                  <small>Area and volume are calculated from the displayed mesh.</small>
-                </section>
-              )}
               {(activeTool === 'convert' || activeTool === 'simplify') && (
                 <section className="conversion-panel" aria-labelledby="conversion-title">
                   <span className="panel-label">{activeTool === 'simplify' ? 'Local model reduction' : 'Local format conversion'}</span>

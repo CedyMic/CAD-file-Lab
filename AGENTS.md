@@ -16,6 +16,9 @@ These requirements apply to every implementation and review in this repository.
 - Setup flows such as plane selection must use compact floating or docked panels; they must not replace the graphics area with a large form.
 - Prefer one-row tool groups, small icons with short labels, compact fields, and collapsible advanced options.
 - Before shipping any UI, inspect it at 1366x768 and verify that toolbars are fully visible, do not clip, and leave most space to the model or sketch.
+- Every command and piece of state has one primary UI owner. Do not repeat the same filters, results, selection state, or actions across the CommandManager, Manager Pane, graphics area, and properties sidebar.
+- Contextual panels must never create an implicit flexible grid row. Account for every dynamic child so the graphics area remains the only flexible workspace row.
+- Treat duplicated controls, an unexpectedly small graphics area, or the same result shown in multiple panels as a release-blocking visual regression.
 
 ## CAD behavior review
 

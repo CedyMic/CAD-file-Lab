@@ -310,6 +310,19 @@ textarea:focus-visible {
   border-right: 1px solid #dce3ea;
 }
 
+.workspace.measure-mode {
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+.workspace.measure-mode .sidebar {
+  padding: 0;
+}
+
+.workspace.measure-mode .sidebar > :not(.measure-manager),
+.workspace.measure-mode .properties-sidebar {
+  display: none;
+}
+
 .sidebar .model-tree {
   margin-top: 0;
 }
@@ -1678,12 +1691,6 @@ textarea:focus-visible {
 .feature-tree-group > div { display: grid; grid-template-columns: 15px 1fr auto; align-items: center; gap: 5px; padding: 4px 7px 4px 28px; }
 .feature-tree-group small { color: #7890a3; font-size: 9px; }
 .feature-tree-feature { color: #154f7b; }
-.measure-commandbar { display: flex; align-items: stretch; gap: 12px; min-height: 62px; padding: 7px 10px; color: #d9e6f2; background: #1c2b38; border-bottom: 1px solid #3b5163; }
-.measure-commandbar > div { display: grid; grid-template-columns: repeat(4, auto); align-content: center; gap: 4px; padding-right: 12px; border-right: 1px solid #415668; }
-.measure-commandbar > div > span { grid-column: 1 / -1; color: #8fa7ba; font-size: 9px; font-weight: 700; text-transform: uppercase; }
-.measure-commandbar button { min-height: 29px; padding: 5px 10px; }
-.measure-commandbar button.selected { color: #fff; background: #176fc5; border-color: #6cb4f5; }
-.measure-commandbar small { align-self: center; max-width: 270px; color: #9fb4c4; font-size: 10px; line-height: 1.3; }
 .measure-manager { display: grid; gap: 7px; padding: 8px; color: #24394b; background: #f6f8fa; border-bottom: 1px solid #a9bbc9; }
 .measure-manager header { display: flex; align-items: center; justify-content: space-between; }
 .measure-manager header button { min-width: 27px; min-height: 27px; padding: 0; }
@@ -1697,3 +1704,10 @@ textarea:focus-visible {
 .measure-manager-results { display: grid; gap: 2px; padding-block: 4px; border-block: 1px solid #c5d1da; }
 .measure-manager-results div { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; }
 .measure-manager-results div span { color: #60798d; }
+.measure-manager-properties { display: grid; gap: 3px; padding-block: 3px; }
+.measure-manager-properties > span { color: #60798d; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.measure-manager-properties div { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; }
+.measure-manager-properties div span,
+.measure-manager-properties small { color: #60798d; }
+.measure-manager-properties div strong { max-width: 145px; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.measure-manager-properties small { font-size: 9px; }
