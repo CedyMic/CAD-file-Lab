@@ -31,6 +31,8 @@ import {
   defaultDisplaySettings,
   type DisplaySettings,
 } from './displaySettings'
+import { calculateModelLayout } from './modelLayout'
+import { createSectionPlane, type SectionSettings } from './sectionClipping'
 
 import {
   addDistancePoint,
@@ -57,6 +59,7 @@ export interface ViewCommand {
 interface CadViewportProps {
   model: ImportedCadBody | null
   settings?: DisplaySettings
+  section?: SectionSettings | null
   viewCommand?: ViewCommand | null
   hiddenPartIds?: ReadonlySet<string>
   selectedPartIds?: ReadonlySet<string>
@@ -235,6 +238,7 @@ function ImportedPart({
   color,
   selected,
   opacity,
+  sectionPlane,
   onSelect,
   onMeasurePoint,
   onMeasureLine,
@@ -246,6 +250,7 @@ function ImportedPart({
   color: string
   selected: boolean
   opacity: number
+  sectionPlane: THREE.Plane | null
   onSelect: (additive: boolean) => void
   onMeasurePoint?: (sample: FaceSample) => void
   onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number, entityId: string) => void
@@ -412,6 +417,7 @@ function ImportedPart({
           polygonOffset
           polygonOffsetFactor={1}
           polygonOffsetUnits={1}
+          clippingPlanes={sectionPlane ? [sectionPlane] : undefined}
         />
       </mesh>
 
@@ -444,6 +450,7 @@ function ImportedPart({
               settings.edgeOpacity < 1
             }
             opacity={showEdges ? settings.edgeOpacity : 0}
+            clippingPlanes={sectionPlane ? [sectionPlane] : undefined}
           />
         </lineSegments>
       )}
@@ -455,6 +462,7 @@ function ImportedPart({
             depthTest={false}
             transparent
             opacity={0.95}
+            clippingPlanes={sectionPlane ? [sectionPlane] : undefined}
           />
         </lineSegments>
       )}
@@ -473,6 +481,8 @@ function ImportedModel({
   onMeasurePoint,
   onMeasureLine,
   measurementMode,
+  modelPosition,
+  sectionPlane,
 }: {
   model: ImportedCadBody
   settings: DisplaySettings
@@ -484,20 +494,9 @@ function ImportedModel({
   onMeasurePoint?: (sample: FaceSample) => void
   onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number, entityId: string) => void
   measurementMode: MeasurementMode
+  modelPosition: THREE.Vector3
+  sectionPlane: THREE.Plane | null
 }) {
-  const modelPosition = useMemo(() => {
-    const positions = convertZUpToYUp(model.faces.vertices)
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geometry.computeBoundingBox()
-    const bounds = geometry.boundingBox
-    geometry.dispose()
-
-    if (!bounds) return new THREE.Vector3()
-    const center = bounds.getCenter(new THREE.Vector3())
-    return new THREE.Vector3(-center.x, -bounds.min.y, -center.z)
-  }, [model])
-
   return (
     <group>
       {model.renderParts.map((part) => (
@@ -510,6 +509,7 @@ function ImportedModel({
             color={partColors.get(part.id) ?? settings.modelColor}
             selected={selectedPartIds.has(part.id)}
             opacity={partOpacities.get(part.id) ?? 1}
+            sectionPlane={sectionPlane}
             onSelect={(additive) => onSelectPart(part.id, additive)}
             onMeasurePoint={onMeasurePoint}
             onMeasureLine={onMeasureLine}
@@ -589,6 +589,8 @@ function MeasurableImportedModel({
   onSelectPart,
   onMeasurementChange,
   measurementMode,
+  modelPosition,
+  sectionPlane,
 }: {
   model: ImportedCadBody
   settings: DisplaySettings
@@ -599,6 +601,8 @@ function MeasurableImportedModel({
   onSelectPart: (partId: string, additive: boolean) => void
   onMeasurementChange?: (summary: MeasurementSummary) => void
   measurementMode: MeasurementMode
+  modelPosition: THREE.Vector3
+  sectionPlane: THREE.Plane | null
 }) {
   const [measurement, setMeasurement] = useState({
     distance: emptyDistanceMeasurement,
@@ -679,6 +683,8 @@ function MeasurableImportedModel({
         partOpacities={partOpacities}
         onSelectPart={onSelectPart}
         measurementMode={measurementMode}
+        modelPosition={modelPosition}
+        sectionPlane={sectionPlane}
         onMeasurePoint={(sample) => {
           setMeasurement((current) => {
             const existing = current.faces.length === 1 ? current.faces[0] : null
@@ -923,6 +929,7 @@ export function CadViewport({
   model,
   settings =
     defaultDisplaySettings,
+  section = null,
   viewCommand = null,
   hiddenPartIds = new Set<string>(),
   selectedPartIds = new Set<string>(),
@@ -951,6 +958,16 @@ export function CadViewport({
       [model],
     )
 
+  const modelLayout = useMemo(() => calculateModelLayout(model), [model])
+  const modelPosition = useMemo(() => new THREE.Vector3(...modelLayout.position), [modelLayout])
+  const sectionPlane = useMemo(() => {
+    if (!model || !section) return null
+    const definition = createSectionPlane(model, modelLayout, section)
+    return definition
+      ? new THREE.Plane(new THREE.Vector3(...definition.normal), definition.constant)
+      : null
+  }, [model, modelLayout, section])
+
   const gridCellSize = Math.max(viewMetrics.radius / 8, 0.1)
   const gridSectionSize = gridCellSize * 5
 
@@ -975,6 +992,7 @@ export function CadViewport({
           true,
       }}
       onCreated={({ gl }) => {
+        gl.localClippingEnabled = true
         gl.toneMapping = THREE.ACESFilmicToneMapping
         gl.toneMappingExposure = 1.05
         gl.outputColorSpace = THREE.SRGBColorSpace
@@ -1077,6 +1095,8 @@ export function CadViewport({
               onSelectPart={onSelectPart}
               onMeasurementChange={onMeasurementChange}
               measurementMode={measurementMode}
+              modelPosition={modelPosition}
+              sectionPlane={sectionPlane}
             />
           ) : (
             <ImportedModel
@@ -1088,9 +1108,11 @@ export function CadViewport({
               partColors={partColors}
               partOpacities={partOpacities}
               onSelectPart={onSelectPart}
+              modelPosition={modelPosition}
+              sectionPlane={sectionPlane}
             />
           )}
-          <ContactShadows
+          {!section && <ContactShadows
             position={[0, -0.002, 0]}
             opacity={0.32}
             scale={Math.max(viewMetrics.radius * 4, 4)}
@@ -1098,7 +1120,7 @@ export function CadViewport({
             far={Math.max(viewMetrics.radius * 3, 3)}
             resolution={512}
             color="#05090d"
-          />
+          />}
         </>
       ) : (
         <TestModel

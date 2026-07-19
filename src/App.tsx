@@ -73,6 +73,10 @@ import {
   defaultDisplaySettings,
   type DisplaySettings,
 } from './viewer/displaySettings'
+import {
+  defaultSectionSettings,
+  type SectionSettings,
+} from './viewer/sectionClipping'
 
 import {
   convertTriangleMesh,
@@ -136,6 +140,12 @@ const tools: Array<{
     label: 'Convert',
     description:
       'Download the open model in another mesh format',
+    available: true,
+  },
+  {
+    id: 'section',
+    label: 'Section',
+    description: 'Preview a non-destructive clipping plane',
     available: true,
   },
   {
@@ -527,6 +537,7 @@ function App() {
   const [featureModelBodyId, setFeatureModelBodyId] = useState<string | null>(null)
   const [measurementSummary, setMeasurementSummary] = useState<MeasurementSummary>({ selections: [] })
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>('auto')
+  const [sectionSettings, setSectionSettings] = useState<SectionSettings>(defaultSectionSettings)
 
   const [selectedPartIds, setSelectedPartIds] = useState<Set<string>>(() => new Set())
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(() => new Set())
@@ -1629,8 +1640,8 @@ function App() {
             <button className={activeTool === 'measure' ? 'active' : ''} type="button" aria-pressed={activeTool === 'measure'} disabled={!model} onClick={() => { setSelectedPartIds(new Set()); setActiveTool('measure') }} title="Open measurement tools">
               <strong>Measure</strong><span>Inspect geometry</span>
             </button>
-            <button type="button" disabled title="Section view is in development">
-              <strong>Section</strong><span>Planned</span>
+            <button className={activeTool === 'section' ? 'active' : ''} type="button" aria-pressed={activeTool === 'section'} disabled={!model} onClick={() => { setSelectedPartIds(new Set()); setActiveTool('section') }} title="Preview a non-destructive section">
+              <strong>Section</strong><span>Cutaway view</span>
             </button>
           </div>
         </div>
@@ -1652,7 +1663,7 @@ function App() {
         </div>
       </nav>
 
-      <section className={`workspace${activeTool === 'measure' ? ' measure-mode' : ''}`} id="workspace">
+      <section className={`workspace${activeTool === 'measure' ? ' measure-mode' : activeTool === 'section' ? ' section-mode' : ''}`} id="workspace">
         <aside className="sidebar">
           {activeTool === 'measure' && <section className="measure-manager" aria-label="Measure PropertyManager">
             <header><strong>Measure</strong><button type="button" aria-label="Close Measure" onClick={() => setActiveTool('view')}>×</button></header>
@@ -1678,6 +1689,24 @@ function App() {
               <small>Calculated from the displayed mesh.</small>
             </div>}
             <button type="button" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}>Clear selection</button>
+          </section>}
+          {activeTool === 'section' && <section className="section-manager" aria-label="Section PropertyManager">
+            <header><strong>Section view</strong><button type="button" aria-label="Close Section" onClick={() => setActiveTool('view')}>×</button></header>
+            <small>Viewer-only preview · model geometry is unchanged</small>
+            <label>
+              <span>Plane</span>
+              <select value={sectionSettings.axis} onChange={(event) => setSectionSettings((current) => ({ ...current, axis: event.target.value as SectionSettings['axis'] }))}>
+                <option value="x">Right plane (X)</option>
+                <option value="y">Front plane (Y)</option>
+                <option value="z">Top plane (Z)</option>
+              </select>
+            </label>
+            <label className="section-position-field">
+              <span>Position</span><output>{Math.round(sectionSettings.position)}%</output>
+              <input type="range" min="0" max="100" step="1" value={sectionSettings.position} onChange={(event) => setSectionSettings((current) => ({ ...current, position: Number(event.target.value) }))} />
+            </label>
+            <label className="section-check"><input type="checkbox" checked={sectionSettings.flip} onChange={(event) => setSectionSettings((current) => ({ ...current, flip: event.target.checked }))} /><span>Flip visible side</span></label>
+            <button type="button" onClick={() => setSectionSettings(defaultSectionSettings)}>Reset section</button>
           </section>}
           <section className="model-tree" aria-labelledby="model-tree-title">
             <div className="model-tree-header">
@@ -1951,6 +1980,7 @@ function App() {
               settings={
                 displaySettings
               }
+              section={activeTool === 'section' ? sectionSettings : null}
               viewCommand={
                 viewCommand
               }

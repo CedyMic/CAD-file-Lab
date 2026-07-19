@@ -13,8 +13,8 @@ are not uploaded by the application.
 - Portable `.cadlab` project files preserve editable geometry and display
   settings for browser-local save and reopen workflows.
 - Browser-local recovery is available and can be erased in the application.
-- Measure, section, modify, and CAD-format export are planned and are labelled
-  unavailable.
+- Geometry Measure and non-destructive X/Y/Z section previews are available.
+  Exact modify operations and exact CAD-format export remain in development.
 - The bundled OCCT kernel has a machine-verified provenance chain and public
   source/relinking offer. See [LEGAL_DISTRIBUTION.md](./LEGAL_DISTRIBUTION.md).
 

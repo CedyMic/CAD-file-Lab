@@ -310,16 +310,20 @@ textarea:focus-visible {
   border-right: 1px solid #dce3ea;
 }
 
-.workspace.measure-mode {
+.workspace.measure-mode,
+.workspace.section-mode {
   grid-template-columns: 260px minmax(0, 1fr);
 }
 
-.workspace.measure-mode .sidebar {
+.workspace.measure-mode .sidebar,
+.workspace.section-mode .sidebar {
   padding: 0;
 }
 
 .workspace.measure-mode .sidebar > :not(.measure-manager),
-.workspace.measure-mode .properties-sidebar {
+.workspace.measure-mode .properties-sidebar,
+.workspace.section-mode .sidebar > :not(.section-manager),
+.workspace.section-mode .properties-sidebar {
   display: none;
 }
 
@@ -1711,3 +1715,13 @@ textarea:focus-visible {
 .measure-manager-properties small { color: #60798d; }
 .measure-manager-properties div strong { max-width: 145px; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .measure-manager-properties small { font-size: 9px; }
+.section-manager { display: grid; gap: 10px; padding: 9px; color: #24394b; background: #f6f8fa; border-bottom: 1px solid #a9bbc9; }
+.section-manager header { display: flex; align-items: center; justify-content: space-between; }
+.section-manager header button { width: 27px; min-height: 27px; padding: 0; }
+.section-manager > small { color: #60798d; font-size: 9px; line-height: 1.35; }
+.section-manager label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 5px; color: #40596d; font-size: 10px; font-weight: 700; }
+.section-manager select { grid-column: 1 / -1; width: 100%; min-height: 29px; }
+.section-position-field input { grid-column: 1 / -1; width: 100%; }
+.section-position-field output { color: #176fc5; }
+.section-manager .section-check { grid-template-columns: auto 1fr; }
+.section-manager > button { min-height: 29px; }
