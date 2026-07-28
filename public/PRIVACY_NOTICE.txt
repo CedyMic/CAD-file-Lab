@@ -1,7 +1,7 @@
 CAD FILE LAB - PRIVACY NOTICE
 =============================
 
-Last updated: 2026-07-12
+Last updated: 2026-07-28
 
 Controller
 ----------
@@ -22,9 +22,36 @@ recovery data to an application server. Recovery data is stored in the
 browser's IndexedDB database on the visitor's device and can be erased from
 the application.
 
-The application has no analytics, advertising, account system, or application
-cookies. The feedback tool only copies text to the visitor's clipboard; it
-does not transmit the text.
+The CAD workspace has no account system and does not load advertising code.
+The feedback tool only copies text to the visitor's clipboard; it does not
+transmit the text.
+
+Advertising on public content pages
+-----------------------------------
+
+Public editorial pages, including the landing page, format reference, guides,
+about page, and support page, may load Google AdSense. The CAD workspace at
+/workspace does not load AdSense and is not monetized.
+
+Google and participating advertising vendors may use cookies, local storage,
+IP addresses, device information, and similar identifiers to deliver, limit,
+measure, and personalize advertisements where permitted. Third-party vendors,
+including Google, may use advertising cookies based on a visitor's previous
+visits to this or other websites. Google's use of advertising cookies enables
+Google and its partners to serve advertisements based on those visits.
+
+Visitors can manage personalized advertising in Google Ads Settings:
+https://adssettings.google.com/
+
+For visitors in the EEA, United Kingdom, and Switzerland, advertising consent
+choices are collected through the Google-certified consent message configured
+for this site. Advertising storage and personalized advertising are used only
+in accordance with the visitor's available choices and applicable law. The
+message can be reopened using the privacy-options control when supplied by the
+consent platform.
+
+Google's privacy information is available at:
+https://policies.google.com/privacy
 
 Hosting data
 ------------

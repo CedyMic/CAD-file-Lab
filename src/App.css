@@ -234,6 +234,7 @@ textarea:focus-visible {
   border-radius: 7px;
   font-size: 12px;
   font-weight: 700;
+  text-decoration: none;
 }
 
 .topbar-link:hover {
@@ -333,42 +334,6 @@ textarea:focus-visible {
 
 .sidebar .model-tree {
   margin-top: 0;
-}
-
-.sidebar-ad-slot {
-  min-height: 250px;
-  margin-top: 14px;
-  padding: 12px;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 10px;
-  color: #7a8996;
-  text-align: center;
-  background: #f7f8f9;
-  border: 1px dashed #bdc8d1;
-  border-radius: 8px;
-}
-
-.sidebar-ad-slot > span {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.sidebar-ad-slot > div {
-  display: grid;
-  gap: 4px;
-}
-
-.sidebar-ad-slot strong {
-  color: #657684;
-  font-size: 11px;
-}
-
-.sidebar-ad-slot small {
-  font-size: 9px;
 }
 
 .properties-sidebar {
@@ -936,30 +901,6 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
-.start-ad-slot {
-  margin-top: 10px;
-  padding: 8px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: #788896;
-  background: #f4f5f6;
-  border: 1px dashed #cbd3da;
-  border-radius: 7px;
-  font-size: 9px;
-}
-
-.start-ad-slot span {
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.start-ad-slot p {
-  margin: 0;
-}
-
 .viewport-error {
   position: absolute;
   z-index: 6;
@@ -1490,9 +1431,6 @@ textarea:focus-visible {
     display: none;
   }
 
-  .sidebar-ad-slot {
-    display: none;
-  }
 }
 
 .toolbar-availability {

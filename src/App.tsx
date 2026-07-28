@@ -10,7 +10,7 @@ import {
 
 import './App.css'
 
-import { LandingPage } from './marketing/LandingPage'
+import { MarketingSite } from './marketing/MarketingSite'
 
 import {
   disposeCadBody,
@@ -1589,7 +1589,7 @@ function App() {
   }
 
   if (window.location.pathname !== '/workspace') {
-    return <LandingPage />
+    return <MarketingSite path={window.location.pathname.replace(/\/$/, '') || '/'} />
   }
 
   return (
@@ -1615,13 +1615,9 @@ function App() {
         </div>
 
         <div className="topbar-actions">
-          <button
-            className="topbar-link"
-            type="button"
-            onClick={() => openInformationPanel('help')}
-          >
+          <a className="topbar-link" href="/guides">
             Help &amp; Guides
-          </button>
+          </a>
 
           <button
             className="topbar-link"
@@ -1892,14 +1888,6 @@ function App() {
               <p>Open a 3D file to inspect its bodies and structure.</p>
             )}
           </section>
-
-          <aside className="sidebar-ad-slot" aria-label="Advertisement">
-            <span>Advertisement</span>
-            <div>
-              <strong>Contextual sponsor space</strong>
-              <small>No model data is shared.</small>
-            </div>
-          </aside>
 
           <section className="project-panel">
             <div>
@@ -2179,10 +2167,6 @@ function App() {
                     Continue recovered project: {latestRecovery.project.fileName}
                   </button>
                 )}
-                <aside className="start-ad-slot" aria-label="Advertisement">
-                  <span>Advertisement</span>
-                  <p>Reserved for privacy-respecting contextual sponsorship.</p>
-                </aside>
               </section>
             )}
 

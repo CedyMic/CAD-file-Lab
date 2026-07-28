@@ -6,4 +6,14 @@
   <url>
     <loc>https://www.cadfilelab.com/workspace</loc>
   </url>
+  <url><loc>https://www.cadfilelab.com/guides</loc></url>
+  <url><loc>https://www.cadfilelab.com/guides/open-and-inspect-step-files</loc></url>
+  <url><loc>https://www.cadfilelab.com/guides/measure-3d-models</loc></url>
+  <url><loc>https://www.cadfilelab.com/guides/convert-3d-file-formats</loc></url>
+  <url><loc>https://www.cadfilelab.com/guides/reduce-mesh-file-size</loc></url>
+  <url><loc>https://www.cadfilelab.com/guides/browser-local-cad-privacy</loc></url>
+  <url><loc>https://www.cadfilelab.com/guides/troubleshoot-3d-file-imports</loc></url>
+  <url><loc>https://www.cadfilelab.com/formats</loc></url>
+  <url><loc>https://www.cadfilelab.com/about</loc></url>
+  <url><loc>https://www.cadfilelab.com/support</loc></url>
 </urlset>
