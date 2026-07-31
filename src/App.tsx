@@ -27,7 +27,7 @@ import {
 } from './cad/cadClient'
 import type { CadPrimitive } from './cad/primitive'
 import type { CadFeatureModel, SketchExtrudeFeature } from './cad/featureModel'
-import { createSketchEditorState, reduceSketch, type SketchEntity } from './cad/sketchModel'
+import { createSketchEditorState, reduceSketch, snapSketchPoint, type SketchEntity } from './cad/sketchModel'
 
 import {
   CAD_LAB_PROJECT_EXTENSION,
@@ -254,16 +254,20 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
   }, [stage])
   useEffect(() => {
     const stopLine = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && stage === 'sketch' && tool !== 'select') {
+      if (event.key !== 'Escape' || stage !== 'sketch') return
+      if (tool !== 'select') {
         setTool('select')
         setHoverPoint(null)
         setDrag(null)
+        setLinePoints([])
         setArcPoints([])
+        return
       }
+      if (sketchState.selectedEntityIds.length) dispatchSketch({ type: 'clearSelection' })
     }
     window.addEventListener('keydown', stopLine)
     return () => window.removeEventListener('keydown', stopLine)
-  }, [stage, tool])
+  }, [sketchState.selectedEntityIds.length, stage, tool])
   useEffect(() => {
     const editSketch = (event: KeyboardEvent) => {
       if (stage !== 'sketch') return
@@ -296,13 +300,8 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     return [local.x, local.y]
   }
   const snappedLinePoint = (raw: [number, number]): [number, number] => {
-    const endpoint = linePoints.find((candidate) => Math.hypot(raw[0] - candidate[0], raw[1] - candidate[1]) <= 10)
-    if (endpoint) return endpoint
     const previous = linePoints.at(-1)
-    if (!previous) return raw
-    if (Math.abs(raw[0] - previous[0]) <= 7) return [previous[0], raw[1]]
-    if (Math.abs(raw[1] - previous[1]) <= 7) return [raw[0], previous[1]]
-    return raw
+    return snapSketchPoint(raw, sketchState.document, previous, 10).point
   }
   const finish = (end: [number, number]) => {
     if (!drag) return
@@ -373,29 +372,40 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       dispatchSketch({ type: 'updateEntity', entity: { ...second, end: [second.start[0] + direction[0] * targetLength, second.start[1] + direction[1] * targetLength] } })
       dispatchSketch({ type: 'addConstraint', constraint: { id: `relation-${crypto.randomUUID()}`, type, firstEntityId: first.id, secondEntityId: second.id } })
     }
+    const closeLineProfile = () => {
+      const first = linePoints[0]
+      const last = linePoints.at(-1)
+      if (!first || !last || linePoints.length < 3) return
+      if (Math.hypot(last[0] - first[0], last[1] - first[1]) > 0.01) {
+        dispatchSketch({ type: 'addEntity', entity: { id: `line-${crypto.randomUUID()}`, type: 'line', start: last, end: first } })
+      }
+      replaceFeature({
+        ...feature,
+        plane,
+        profile: { type: 'polyline', points: linePoints.map(([x, y]) => [Math.round((x - origin[0]) * 10) / 10, Math.round((origin[1] - y) * 10) / 10]) },
+      })
+      setLinePoints((current) => [...current, current[0]])
+      setDrag({ start: first, end: first })
+      setTool('select')
+      setHoverPoint(null)
+    }
     return <section className="sketch-workflow">
-      <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
+      <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><div className="sketch-heading-actions"><button type="button" onClick={() => setStage('plane')}>Cancel</button><button className="primary-button" type="button" disabled={!drag || (feature.profile.type !== 'polyline' && dx < 1 && dy < 1)} onClick={() => setStage('extrude')}>Exit sketch</button></div></div>
       <div className="cad-command-tabs"><button className="selected" type="button">Sketch</button><button type="button" disabled>Features</button></div>
       <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
         <button className={tool === 'select' ? 'selected' : ''} type="button" onClick={() => { setTool('select'); setDrag(null); setHoverPoint(null); setArcPoints([]) }}>↖ Select</button>
         <button type="button" disabled={!sketchState.undoStack.length} onClick={() => dispatchSketch({ type: 'undo' })}>↶ Undo</button>
         <button type="button" disabled={!sketchState.redoStack.length} onClick={() => dispatchSketch({ type: 'redo' })}>↷ Redo</button>
         <button className={tool === 'line' ? 'selected' : ''} type="button" onClick={() => { setTool('line'); setDrag(null); setLinePoints([]); setHoverPoint(null) }}>╱ Line</button>
-        <button className={tool === 'centerline' ? 'selected' : ''} type="button" disabled title="Coming in the next sketch-kernel milestone">┄ Centerline</button>
         <button className={tool === 'rectangle' ? 'selected' : ''} type="button" onClick={() => { setTool('rectangle'); setDrag(null) }}>▭ Rectangle</button>
         <button className={tool === 'circle' ? 'selected' : ''} type="button" onClick={() => { setTool('circle'); setDrag(null) }}>○ Circle</button>
-        <button className={tool === 'arc' ? 'selected' : ''} type="button" onClick={() => { setTool('arc'); setArcPoints([]); setDrag(null) }}>⌒ Centerpoint Arc</button>
-        <button className={tool === 'dimension' ? 'selected' : ''} type="button" onClick={() => setTool('dimension')}>↔ Smart Dimension</button>
-        <button type="button" disabled>Trim</button><button type="button" disabled>Offset entities</button><button type="button" disabled>Mirror entities</button>
-        <button type="button" disabled={selectedLines.length !== 1} onClick={() => applySingleLineRelation('horizontal')}>— Horizontal</button>
-        <button type="button" disabled={selectedLines.length !== 1} onClick={() => applySingleLineRelation('vertical')}>│ Vertical</button>
-        <button type="button" disabled={selectedLines.length !== 2} onClick={() => applyTwoLineRelation('parallel')}>∥ Parallel</button>
-        <button type="button" disabled={selectedLines.length !== 2} onClick={() => applyTwoLineRelation('perpendicular')}>⊥ Perpendicular</button>
-        <button type="button" disabled={selectedLines.length !== 2} onClick={() => applyTwoLineRelation('equal')}>= Equal</button>
+        {tool === 'line' && linePoints.length >= 3 && <button type="button" onClick={closeLineProfile}>Close profile</button>}
       </div>
       <svg ref={canvasRef} className="sketch-canvas" viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
         onPointerDown={(event) => {
-          const start = tool === 'line' ? snappedLinePoint(point(event)) : point(event)
+          const raw = point(event)
+          const originCandidate: [number, number] = Math.hypot(raw[0] - origin[0], raw[1] - origin[1]) <= 10 ? origin : raw
+          const start = tool === 'line' ? snappedLinePoint(originCandidate) : raw
           if (tool === 'arc') {
             const next = [...arcPoints, start]
             if (next.length === 3) {
@@ -409,12 +419,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
           }
           if (tool === 'line') {
             if (linePoints.length >= 3 && Math.hypot(start[0] - linePoints[0][0], start[1] - linePoints[0][1]) < 8) {
-              dispatchSketch({ type: 'addEntity', entity: { id: `line-${crypto.randomUUID()}`, type: 'line', start: linePoints.at(-1)!, end: linePoints[0] } })
-              replaceFeature({ ...feature, plane, profile: { type: 'polyline', points: linePoints.map(([x, y]) => [Math.round((x - origin[0]) * 10) / 10, Math.round((origin[1] - y) * 10) / 10]) } })
-              setLinePoints((current) => [...current, current[0]])
-              setDrag({ start: linePoints[0], end: linePoints[0] })
-              setTool('select')
-              setHoverPoint(null)
+              closeLineProfile()
             } else {
               const previous = linePoints.at(-1)
               if (previous) dispatchSketch({ type: 'addEntity', entity: { id: `line-${crypto.randomUUID()}`, type: 'line', start: previous, end: start } })
@@ -450,16 +455,17 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
           <label><span>Diameter (mm)</span><input type="number" min="0.02" step="0.01" value={(selectedSketchEntity.radius * 2).toFixed(2)} onChange={(event) => dispatchSketch({ type: 'updateEntity', entity: { ...selectedSketchEntity, radius: Math.max(0.01, Number(event.target.value) / 2) } })} /></label>
         </>}
         <label className="inline-check"><input type="checkbox" checked={selectedSketchEntity.construction === true} onChange={(event) => dispatchSketch({ type: 'updateEntity', entity: { ...selectedSketchEntity, construction: event.target.checked } })} /><span>For construction</span></label>
+        {selectedLines.length === 1 && <div className="sketch-relation-actions" aria-label="Line relations"><button type="button" onClick={() => applySingleLineRelation('horizontal')}>— Horizontal</button><button type="button" onClick={() => applySingleLineRelation('vertical')}>│ Vertical</button></div>}
+        {selectedLines.length === 2 && <div className="sketch-relation-actions" aria-label="Two-line relations"><button type="button" onClick={() => applyTwoLineRelation('parallel')}>∥ Parallel</button><button type="button" onClick={() => applyTwoLineRelation('perpendicular')}>⊥ Perpendicular</button><button type="button" onClick={() => applyTwoLineRelation('equal')}>= Equal</button></div>}
         {sketchState.document.constraints.some((constraint) => ('entityId' in constraint ? constraint.entityId === selectedSketchEntity.id : constraint.firstEntityId === selectedSketchEntity.id || constraint.secondEntityId === selectedSketchEntity.id)) && <div className="sketch-relation-list"><span>Existing relations</span>{sketchState.document.constraints.filter((constraint) => ('entityId' in constraint ? constraint.entityId === selectedSketchEntity.id : constraint.firstEntityId === selectedSketchEntity.id || constraint.secondEntityId === selectedSketchEntity.id)).map((constraint) => <strong key={constraint.id}>{constraint.type}</strong>)}</div>}
         <button type="button" onClick={() => dispatchSketch({ type: 'removeEntities', entityIds: [selectedSketchEntity.id] })}>Delete entity</button>
       </aside>}
       <small>{tool === 'line' ? 'Click endpoints. Click the first red point to close the profile.' : 'Click and drag in the sketch. Dimensions are displayed on the sketch.'}</small>
-      <button className="primary-button" type="button" disabled={!drag || (feature.profile.type !== 'polyline' && dx < 1 && dy < 1)} onClick={() => setStage('extrude')}>Exit sketch</button>
     </section>
   }
   return <form className="sketch-workflow" onSubmit={(event) => { event.preventDefault(); onBuild() }}>
     <div className="cad-command-tabs"><button type="button" onClick={() => setStage('sketch')}>Sketch</button><button className="selected" type="button">Features</button></div>
-    <div className="feature-tools" role="toolbar" aria-label="Feature tools"><button className="selected" type="button">Extruded Boss/Base</button><button type="button" disabled>Extruded Cut</button><button type="button" disabled>Revolve</button><button type="button" disabled>Sweep</button><button type="button" disabled>Loft</button><button type="button" disabled>Fillet</button><button type="button" disabled>Pattern</button><button type="button" onClick={() => setStage('plane')}>Reference Geometry</button></div>
+    <div className="feature-tools" role="toolbar" aria-label="Feature tools"><button className="selected" type="button">Extruded Boss/Base</button></div>
     <span className="panel-label">Boss-Extrude</span>
     <div className="sketch-summary"><div><strong>Sketch1</strong><span>{feature.plane}{feature.planeOffset ? ` + ${feature.planeOffset} mm` : ''} · {feature.profile.type === 'rectangle' ? `${feature.profile.width} × ${feature.profile.height} mm` : feature.profile.type === 'circle' ? `Ø ${feature.profile.radius * 2} mm` : `${feature.profile.points.length} line segments`}</span></div><button type="button" onClick={() => setStage('sketch')}>Edit sketch</button></div>
     {feature.profile.type === 'rectangle' ? <div className="dimension-grid">
