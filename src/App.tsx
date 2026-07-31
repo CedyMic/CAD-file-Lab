@@ -26,8 +26,14 @@ import {
   type ImportedCadBody,
 } from './cad/cadClient'
 import type { CadPrimitive } from './cad/primitive'
-import type { CadFeatureModel, SketchExtrudeFeature } from './cad/featureModel'
-import { createSketchEditorState, reduceSketch, snapSketchPoint, type SketchEntity } from './cad/sketchModel'
+import {
+  migrateCadFeatureModel,
+  type CadFeatureDocument,
+  type CadFeatureModel,
+  type SketchExtrudeFeature,
+} from './cad/featureModel'
+import { createSketchEditorState, reduceSketch, snapSketchPoint, type SketchDocument, type SketchEntity } from './cad/sketchModel'
+import { cadFeatureDocumentToLegacyModel, sketchDocumentToModelSpace } from './cad/sketchAdapter'
 
 import {
   CAD_LAB_PROJECT_EXTENSION,
@@ -219,8 +225,12 @@ function FeatureModelEditor({ model, disabled, onChange, onBuild }: {
 
 void FeatureModelEditor
 
-function SketchCreator({ model, disabled, onChange, onBuild }: {
-  model: CadFeatureModel; disabled: boolean; onChange: (model: CadFeatureModel) => void; onBuild: () => void
+function SketchCreator({ model, disabled, onChange, onDocumentChange, onBuild }: {
+  model: CadFeatureModel
+  disabled: boolean
+  onChange: (model: CadFeatureModel) => void
+  onDocumentChange: (document: CadFeatureDocument) => void
+  onBuild: () => void
 }) {
   const [stage, setStage] = useState<'plane' | 'sketch' | 'extrude'>('plane')
   const [plane, setPlane] = useState<SketchExtrudeFeature['plane']>('XY')
@@ -235,11 +245,45 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
   const [hoverPoint, setHoverPoint] = useState<[number, number] | null>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 900, height: 520 })
   const canvasRef = useRef<SVGSVGElement>(null)
+  const [sketchOrigin, setSketchOrigin] = useState<[number, number] | null>(null)
   const [sketchState, dispatchSketch] = useReducer(reduceSketch, undefined, createSketchEditorState)
   const feature = model.features.at(-1)!
   const replaceFeature = (next: SketchExtrudeFeature) => onChange({
     version: 1, features: model.features.map((item, index) => index === model.features.length - 1 ? next : item),
   })
+  useEffect(() => {
+    if (stage === 'plane' || !feature) return
+    const origin = sketchOrigin ?? [canvasSize.width / 2, canvasSize.height / 2]
+    const toModelPoint = ([x, y]: [number, number]): [number, number] => [x - origin[0], origin[1] - y]
+    const modelDocument: SketchDocument = {
+      ...sketchState.document,
+      entities: sketchState.document.entities.map((entity) => entity.type === 'line'
+        ? { ...entity, start: toModelPoint(entity.start), end: toModelPoint(entity.end) }
+        : { ...entity, center: toModelPoint(entity.center) }),
+      dimensions: sketchState.document.dimensions.map((dimension) => ({ ...dimension, position: toModelPoint(dimension.position) })),
+    }
+    const sketch = sketchDocumentToModelSpace(modelDocument)
+    const sketchId = `${feature.id}-sketch`
+    const history: CadFeatureDocument['features'] = []
+    const support = planeOffset || planeAngle
+      ? { kind: 'referencePlane' as const, featureId: `${feature.id}-plane` }
+      : { kind: 'principal' as const, plane }
+    if (support.kind === 'referencePlane') {
+      history.push({
+        id: support.featureId,
+        type: 'referencePlane',
+        name: 'Plane1',
+        reference: { kind: 'principal', plane },
+        offset: planeOffset,
+        ...(planeAngle ? { angle: { degrees: planeAngle, axis: planeAngleAxis === 'vertical' ? 'v' : 'u' } } : {}),
+      })
+    }
+    history.push(
+      { id: sketchId, type: 'sketch', name: 'Sketch1', support, sketch },
+      { id: feature.id, type: 'extrude', name: feature.name, sketchId, operation: feature.operation, distance: feature.length, reversed: feature.reversed },
+    )
+    onDocumentChange({ version: 2, features: history })
+  }, [canvasSize.height, canvasSize.width, feature, onDocumentChange, plane, planeAngle, planeAngleAxis, planeOffset, sketchOrigin, sketchState.document, stage])
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -289,6 +333,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       profile: { type: 'rectangle', width: 60, height: 40 }, operation: 'boss', length: 10, reversed: false,
     }
     onChange({ version: 1, features: [next] })
+    setSketchOrigin(null)
     setDrag(null)
     setLinePoints([])
     setStage('sketch')
@@ -338,7 +383,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     <button className="primary-button" type="button" onClick={startSketch}>Start sketch</button>
   </section>
   if (stage === 'sketch') {
-    const origin: [number, number] = [canvasSize.width / 2, canvasSize.height / 2]
+    const origin: [number, number] = sketchOrigin ?? [canvasSize.width / 2, canvasSize.height / 2]
     const preview = drag ?? { start: [origin[0] - 50, origin[1] - 35] as [number, number], end: tool === 'rectangle' ? [origin[0] + 50, origin[1] + 35] as [number, number] : [origin[0] + 10, origin[1] - 35] as [number, number] }
     const dx = Math.abs(preview.end[0] - preview.start[0]); const dy = Math.abs(preview.end[1] - preview.start[1])
     const selectedSketchEntity = sketchState.document.entities.find((entity) => sketchState.selectedEntityIds.includes(entity.id))
@@ -403,6 +448,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       </div>
       <svg ref={canvasRef} className="sketch-canvas" viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
         onPointerDown={(event) => {
+          if (!sketchOrigin) setSketchOrigin(origin)
           const raw = point(event)
           const originCandidate: [number, number] = Math.hypot(raw[0] - origin[0], raw[1] - origin[1]) <= 10 ? origin : raw
           const start = tool === 'line' ? snappedLinePoint(originCandidate) : raw
@@ -541,10 +587,11 @@ function App() {
   const [primitiveBodyId, setPrimitiveBodyId] = useState<string | null>(null)
   const [isCreatingPrimitive, setIsCreatingPrimitive] = useState(false)
   const [createMode, setCreateMode] = useState<'primitive' | 'features'>('features')
-  const [featureModel, setFeatureModel] = useState<CadFeatureModel>({
+  const [featureModel, setFeatureModel] = useState<CadFeatureModel>(() => ({
     version: 1,
     features: [{ id: 'feature-1', type: 'sketchExtrude', name: 'Boss-Extrude1', plane: 'XY', profile: { type: 'rectangle', width: 100, height: 60 }, operation: 'boss', length: 10, reversed: false }],
-  })
+  }))
+  const [featureDocument, setFeatureDocument] = useState<CadFeatureDocument>({ version: 2, features: [] })
   const [featureModelBodyId, setFeatureModelBodyId] = useState<string | null>(null)
   const [measurementSummary, setMeasurementSummary] = useState<MeasurementSummary>({ selections: [] })
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>('auto')
@@ -760,7 +807,13 @@ function App() {
       setPrimitiveBodyId(null)
     }
     if (nextModel.featureModel) {
-      setFeatureModel(nextModel.featureModel)
+      const canonical = nextModel.featureModel.version === 1
+        ? migrateCadFeatureModel(nextModel.featureModel)
+        : nextModel.featureModel
+      setFeatureDocument(canonical)
+      setFeatureModel(nextModel.featureModel.version === 1
+        ? nextModel.featureModel
+        : cadFeatureDocumentToLegacyModel(nextModel.featureModel))
       setFeatureModelBodyId(nextModel.bodyId)
       setCreateMode('features')
     } else {
@@ -856,8 +909,8 @@ function App() {
     try {
       const previousBodyId = model?.bodyId
       const nextModel = featureModelBodyId && model?.bodyId === featureModelBodyId
-        ? await updateCadFeatureModel(featureModelBodyId, featureModel)
-        : await createCadFeatureModel(featureModel)
+        ? await updateCadFeatureModel(featureModelBodyId, featureDocument)
+        : await createCadFeatureModel(featureDocument)
       installModel(nextModel)
       setFileName(nextModel.fileName)
       setStatus(`${nextModel.fileName} feature history rebuilt locally`)
@@ -1833,11 +1886,16 @@ function App() {
                   <li className="feature-tree-reference"><span aria-hidden="true">▱</span>Front Plane</li>
                   <li className="feature-tree-reference"><span aria-hidden="true">▱</span>Top Plane</li>
                   <li className="feature-tree-reference"><span aria-hidden="true">▱</span>Right Plane</li>
-                  {(model?.featureModel ?? featureModel).features.map((feature, index) => <li className="feature-tree-group" key={`tree-${feature.id}`}>
+                  {model?.featureModel?.version === 1 && model.featureModel.features.map((feature, index) => <li className="feature-tree-group" key={`tree-${feature.id}`}>
                     {(feature.planeOffset || feature.planeAngle) && <div className="feature-tree-reference"><span aria-hidden="true">▱</span><span>Plane{index + 1}</span><small>{feature.plane}{feature.planeOffset ? ` · ${feature.planeOffset} mm` : ''}{feature.planeAngle ? ` · ${feature.planeAngle}°` : ''}</small></div>}
                     <div className="feature-tree-sketch"><span aria-hidden="true">⌗</span><span>Sketch{index + 1}</span><small>{feature.profile.type}</small></div>
                     <div className="feature-tree-feature"><span aria-hidden="true">▰</span><strong>{feature.name}</strong><small>{feature.operation === 'boss' ? 'Boss-Extrude' : 'Cut-Extrude'}</small></div>
                   </li>)}
+                  {(!model?.featureModel || model.featureModel.version === 2) && featureDocument.features.map((feature) => feature.type === 'referencePlane'
+                    ? <li className="feature-tree-reference" key={`tree-v2-${feature.id}`}><span>Plane</span><strong>{feature.name}</strong><small>{feature.offset ? `${feature.offset} mm` : 'Reference'}</small></li>
+                    : feature.type === 'sketch'
+                      ? <li className="feature-tree-sketch" key={`tree-v2-${feature.id}`}><span>Sketch</span><strong>{feature.name}</strong><small>{feature.sketch.entities.length} entities</small></li>
+                      : <li className="feature-tree-feature" key={`tree-v2-${feature.id}`}><span>Feature</span><strong>{feature.name}</strong><small>{feature.operation === 'boss' ? 'Boss-Extrude' : 'Cut-Extrude'}</small></li>)}
                 </>}
                 {model?.directEdits?.map((feature) => <li className="feature-tree-feature direct-edit-feature" key={feature.id}>
                   <span aria-hidden="true">↕</span><strong>{feature.name}</strong><small>Offset {feature.distance.toFixed(2)} mm</small>
@@ -2070,7 +2128,7 @@ function App() {
             }}
           >
             {activeTool === 'create' && createMode === 'features' ? (
-              <SketchCreator model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} />
+              <SketchCreator model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onDocumentChange={setFeatureDocument} onBuild={() => { void applyFeatureModel() }} />
             ) : <CadViewport
               model={displayedModel}
               settings={

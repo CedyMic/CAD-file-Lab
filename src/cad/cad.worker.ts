@@ -764,12 +764,15 @@ async function updatePrimitive(
   }
 }
 
-function makeSketchExtrusion(feature: SketchExtrudeFeature): Solid {
-  const drawing = feature.profile.type === 'rectangle'
+type BuildSketchExtrudeFeature = SketchExtrudeFeature & { profileCenter?: [number, number] }
+
+function makeSketchExtrusion(feature: BuildSketchExtrudeFeature): Solid {
+  let drawing = feature.profile.type === 'rectangle'
     ? drawRectangle(feature.profile.width, feature.profile.height)
     : feature.profile.type === 'circle'
       ? drawCircle(feature.profile.radius)
       : feature.profile.points.slice(1).reduce((pen, point) => pen.lineTo(point), draw(feature.profile.points[0])).close()
+  if (feature.profile.type === 'circle' && feature.profileCenter) drawing = drawing.translate(feature.profileCenter)
   let sketch
   if (feature.planeAngle) {
     const bases = {
@@ -795,10 +798,13 @@ function validateFeatureHistory(input: CadFeatureHistory): CadFeatureHistory {
   return input.version === 1 ? validateCadFeatureModel(input) : validateCadFeatureDocument(input)
 }
 
-function sketchProfileFromDocument(sketch: ModelSpaceSketchDefinition): SketchExtrudeFeature['profile'] {
+function sketchProfileFromDocument(sketch: ModelSpaceSketchDefinition): { profile: SketchExtrudeFeature['profile']; center?: [number, number] } {
   const entities = sketch.entities.filter((entity) => entity.construction !== true)
-  if (entities.length === 1 && entities[0].type === 'circle') {
-    return { type: 'circle', radius: entities[0].radius }
+  const onlyEntity = entities.length === 1 ? entities[0] : undefined
+  if (onlyEntity?.type === 'circle') {
+    const center = sketch.points.find((point) => point.id === onlyEntity.centerPointId)
+    if (!center) throw new Error('The sketch circle center is missing.')
+    return { profile: { type: 'circle', radius: onlyEntity.radius }, center: [center.x, center.y] }
   }
   if (!entities.length || entities.some((entity) => entity.type !== 'line')) {
     throw new Error('The extrusion needs one closed line loop or one circle.')
@@ -822,7 +828,7 @@ function sketchProfileFromDocument(sketch: ModelSpaceSketchDefinition): SketchEx
     if (!point) throw new Error('The extrusion sketch references a missing point.')
     return [point.x, point.y]
   })
-  return { type: 'polyline', points: profilePoints }
+  return { profile: { type: 'polyline', points: profilePoints } }
 }
 
 function buildFeaturesFromDocument(document: CadFeatureDocument): SketchExtrudeFeature[] {
@@ -843,15 +849,17 @@ function buildFeaturesFromDocument(document: CadFeatureDocument): SketchExtrudeF
       } : {}),
     }
   }
-  return document.features.filter((feature) => feature.type === 'extrude').map((feature) => {
+  return document.features.filter((feature) => feature.type === 'extrude').map((feature): BuildSketchExtrudeFeature => {
     const sketch = sketches.get(feature.sketchId)
     if (!sketch) throw new Error('The extrusion references a missing sketch.')
+    const buildProfile = sketchProfileFromDocument(sketch.sketch)
     return {
       id: feature.id,
       type: 'sketchExtrude',
       name: feature.name,
       ...resolveSupport(sketch.support),
-      profile: sketchProfileFromDocument(sketch.sketch),
+      profile: buildProfile.profile,
+      ...(buildProfile.center ? { profileCenter: buildProfile.center } : {}),
       operation: feature.operation,
       length: feature.distance,
       reversed: feature.reversed,
