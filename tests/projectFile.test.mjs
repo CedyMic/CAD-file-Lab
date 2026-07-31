@@ -81,8 +81,52 @@ test('preserves feature history metadata and rejects invalid histories', () => {
     id: 'base', type: 'sketchExtrude', name: 'Base', plane: 'XZ',
     profile: { type: 'rectangle', width: 80, height: 40 }, operation: 'boss', length: 12, reversed: false,
   }] }
-  assert.deepEqual(parseCadLabProjectFile(JSON.stringify(file)).project.featureModel, file.project.featureModel)
+  const parsed = parseCadLabProjectFile(JSON.stringify(file))
+  assert.equal(parsed.project.featureModel.version, 2)
+  assert.deepEqual(
+    parsed.project.featureModel.features.map((feature) => feature.type),
+    ['sketch', 'extrude'],
+  )
   file.project.featureModel.features[0].operation = 'cut'
+  expectInvalid(file)
+})
+
+test('preserves canonical V2 feature documents in project files', () => {
+  const featureDocument = {
+    version: 2,
+    features: [
+      {
+        id: 'sketch-1', type: 'sketch', name: 'Sketch1',
+        support: { kind: 'principal', plane: 'XY' },
+        sketch: {
+          version: 2,
+          points: [{ id: 'center', x: 0, y: 0 }],
+          entities: [{ id: 'circle-1', type: 'circle', centerPointId: 'center', radius: 15 }],
+          relations: [],
+        },
+      },
+      { id: 'boss-1', type: 'extrude', name: 'Boss-Extrude1', sketchId: 'sketch-1', operation: 'boss', distance: 20, reversed: false },
+    ],
+  }
+  const file = createValidProjectFile()
+  file.project.featureModel = featureDocument
+
+  const parsed = parseCadLabProjectFile(JSON.stringify(file))
+  assert.deepEqual(parsed.project.featureModel, featureDocument)
+
+  const created = createCadLabProjectFile(file.project, displaySettings)
+  assert.deepEqual(created.project.featureModel, featureDocument)
+})
+
+test('rejects invalid V2 feature documents in project files', () => {
+  const file = createValidProjectFile()
+  file.project.featureModel = {
+    version: 2,
+    features: [{
+      id: 'cut-1', type: 'extrude', name: 'Cut-Extrude1',
+      sketchId: 'missing-sketch', operation: 'cut', distance: 5, reversed: false,
+    }],
+  }
   expectInvalid(file)
 })
 

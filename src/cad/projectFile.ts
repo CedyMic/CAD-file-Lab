@@ -2,7 +2,10 @@ import type {
   SerializedCadProject,
 } from './cadClient'
 import { validateCadPrimitive } from './primitive.ts'
-import { validateCadFeatureModel } from './featureModel.ts'
+import {
+  normalizeCadFeatureDocument,
+  type CadFeatureHistory,
+} from './featureModel.ts'
 import { validateDirectEditHistory } from './directEdit.ts'
 
 import type {
@@ -95,11 +98,11 @@ function isDisplaySettings(
   )
 }
 
-function isSerializedProject(
+function normalizeSerializedProject(
   value: unknown,
-): value is SerializedCadProject {
+): SerializedCadProject | null {
   if (!isRecord(value)) {
-    return false
+    return null
   }
 
   const coreIsValid = (
@@ -115,24 +118,49 @@ function isSerializedProject(
     isFiniteNumber(value.savedAt) &&
     value.savedAt > 0
   )
-  if (!coreIsValid) return false
+  if (!coreIsValid) return null
   try {
-    if (value.primitive !== undefined) validateCadPrimitive(value.primitive as never)
-    if (value.featureModel !== undefined) validateCadFeatureModel(value.featureModel as never)
-    if (value.directEdits !== undefined) validateDirectEditHistory(value.directEdits as never)
-    return true
-  } catch { return false }
+    const project: SerializedCadProject = {
+      version: 1,
+      bodyId: value.bodyId as string,
+      fileName: value.fileName as string,
+      serializedShape: value.serializedShape as string,
+      savedAt: value.savedAt as number,
+    }
+
+    if (value.primitive !== undefined) {
+      project.primitive = validateCadPrimitive(value.primitive as never)
+    }
+    if (value.featureModel !== undefined) {
+      // V1 histories remain importable, but project files are emitted and
+      // returned in the canonical V2 feature-document form.
+      project.featureModel = normalizeCadFeatureDocument(
+        value.featureModel as CadFeatureHistory,
+      )
+    }
+    if (value.directEdits !== undefined) {
+      project.directEdits = validateDirectEditHistory(value.directEdits as never)
+    }
+    return project
+  } catch {
+    return null
+  }
 }
 
 export function createCadLabProjectFile(
   project: SerializedCadProject,
   displaySettings: DisplaySettings,
 ): CadLabProjectFile {
+  const normalizedProject = normalizeSerializedProject(project)
+  if (!normalizedProject) {
+    throw new Error('Cannot create a CAD File Lab project from invalid project data.')
+  }
+
   return {
     format: PROJECT_FORMAT,
     version: 1,
     exportedAt: Date.now(),
-    project,
+    project: normalizedProject,
     displaySettings,
   }
 }
@@ -150,13 +178,15 @@ export function parseCadLabProjectFile(
     )
   }
 
+  const project = normalizeSerializedProject(parsed && isRecord(parsed) ? parsed.project : null)
+
   if (
     !isRecord(parsed) ||
     parsed.format !== PROJECT_FORMAT ||
     parsed.version !== 1 ||
     !isFiniteNumber(parsed.exportedAt) ||
     parsed.exportedAt <= 0 ||
-    !isSerializedProject(parsed.project) ||
+    !project ||
     !isDisplaySettings(parsed.displaySettings)
   ) {
     throw new Error(
@@ -164,7 +194,13 @@ export function parseCadLabProjectFile(
     )
   }
 
-  return parsed as unknown as CadLabProjectFile
+  return {
+    format: PROJECT_FORMAT,
+    version: 1,
+    exportedAt: parsed.exportedAt,
+    project,
+    displaySettings: structuredClone(parsed.displaySettings),
+  }
 }
 
 export function getCadLabDownloadName(

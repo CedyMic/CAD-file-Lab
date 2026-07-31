@@ -1,5 +1,5 @@
 import type { CadPrimitive } from './primitive'
-import type { CadFeatureModel } from './featureModel'
+import type { CadFeatureHistory } from './featureModel'
 import type { ExactCadExportFormat } from './exactCadExport'
 import type { DirectEditFeature } from './directEdit'
 
@@ -34,7 +34,7 @@ export interface ImportedCadBody {
   faces: CadFaceMesh
   edges: CadEdgeMesh
   primitive?: CadPrimitive
-  featureModel?: CadFeatureModel
+  featureModel?: CadFeatureHistory
   directEdits?: DirectEditFeature[]
 }
 
@@ -45,7 +45,7 @@ export interface SerializedCadProject {
   serializedShape: string
   savedAt: number
   primitive?: CadPrimitive
-  featureModel?: CadFeatureModel
+  featureModel?: CadFeatureHistory
   directEdits?: DirectEditFeature[]
 }
 
@@ -75,8 +75,8 @@ interface DisposeBodyRequest {
 
 interface CreatePrimitiveRequest { id: string; action: 'createPrimitive'; primitive: CadPrimitive }
 interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId: string; primitive: CadPrimitive }
-interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureModel }
-interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
+interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureHistory }
+interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureHistory }
 interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
 interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; distance: number; preview: boolean }
 
@@ -341,13 +341,13 @@ export async function updateCadPrimitive(bodyId: string, primitive: CadPrimitive
   return response
 }
 
-export async function createCadFeatureModel(featureModel: CadFeatureModel): Promise<ImportedCadBody> {
+export async function createCadFeatureModel(featureModel: CadFeatureHistory): Promise<ImportedCadBody> {
   const response = await sendRequest({ id: crypto.randomUUID(), action: 'createFeatureModel', featureModel })
   if (!isImportedCadBody(response)) throw new Error('The CAD worker returned invalid feature-model data.')
   return response
 }
 
-export async function updateCadFeatureModel(bodyId: string, featureModel: CadFeatureModel): Promise<ImportedCadBody> {
+export async function updateCadFeatureModel(bodyId: string, featureModel: CadFeatureHistory): Promise<ImportedCadBody> {
   const response = await sendRequest({ id: crypto.randomUUID(), action: 'updateFeatureModel', bodyId, featureModel })
   if (!isImportedCadBody(response)) throw new Error('The CAD worker returned invalid feature-model data.')
   return response

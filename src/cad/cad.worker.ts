@@ -39,7 +39,17 @@ import {
 } from './stepImportFile'
 
 import { getPrimitiveFileName, validateCadPrimitive, type CadPrimitive } from './primitive'
-import { getFeatureModelFileName, validateCadFeatureModel, type CadFeatureModel, type SketchExtrudeFeature } from './featureModel'
+import {
+  getFeatureModelFileName,
+  normalizeCadFeatureDocument,
+  validateCadFeatureDocument,
+  validateCadFeatureModel,
+  type CadFeatureDocument,
+  type CadFeatureHistory,
+  type ModelSpaceSketchDefinition,
+  type SketchExtrudeFeature,
+  type SketchSupportPlane,
+} from './featureModel'
 import {
   getExactCadDownloadName,
   validateExactCadExportSize,
@@ -77,7 +87,7 @@ export interface SerializedCadProject {
   serializedShape: string
   savedAt: number
   primitive?: CadPrimitive
-  featureModel?: CadFeatureModel
+  featureModel?: CadFeatureHistory
   directEdits?: DirectEditFeature[]
 }
 
@@ -107,8 +117,8 @@ interface DisposeBodyRequest {
 
 interface CreatePrimitiveRequest { id: string; action: 'createPrimitive'; primitive: CadPrimitive }
 interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId: string; primitive: CadPrimitive }
-interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureModel }
-interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
+interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureHistory }
+interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureHistory }
 interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
 interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; distance: number; preview: boolean }
 
@@ -143,7 +153,7 @@ interface ImportedBodyData {
 
   edges: ReturnType<CadShape['meshEdges']>
   primitive?: CadPrimitive
-  featureModel?: CadFeatureModel
+  featureModel?: CadFeatureHistory
   directEdits?: DirectEditFeature[]
 }
 
@@ -198,7 +208,7 @@ const bodyPrimitives =
   new Map<string, CadPrimitive>()
 
 const bodyFeatureModels =
-  new Map<string, CadFeatureModel>()
+  new Map<string, CadFeatureHistory>()
 
 const bodyDirectEdits =
   new Map<string, DirectEditFeature[]>()
@@ -666,7 +676,7 @@ async function restoreProject(
     : undefined
   if (primitive) bodyPrimitives.set(project.bodyId, primitive)
   const featureModel = project.featureModel
-    ? validateCadFeatureModel(project.featureModel)
+    ? validateFeatureHistory(project.featureModel)
     : undefined
   if (featureModel) bodyFeatureModels.set(project.bodyId, featureModel)
   const directEdits = validateDirectEditHistory(project.directEdits)
@@ -781,11 +791,80 @@ function makeSketchExtrusion(feature: SketchExtrudeFeature): Solid {
   return sketch.extrude(feature.reversed ? -feature.length : feature.length) as Solid
 }
 
-function makeFeatureModelShape(featureModelInput: CadFeatureModel): CadShape {
-  const featureModel = validateCadFeatureModel(featureModelInput)
+function validateFeatureHistory(input: CadFeatureHistory): CadFeatureHistory {
+  return input.version === 1 ? validateCadFeatureModel(input) : validateCadFeatureDocument(input)
+}
+
+function sketchProfileFromDocument(sketch: ModelSpaceSketchDefinition): SketchExtrudeFeature['profile'] {
+  const entities = sketch.entities.filter((entity) => entity.construction !== true)
+  if (entities.length === 1 && entities[0].type === 'circle') {
+    return { type: 'circle', radius: entities[0].radius }
+  }
+  if (!entities.length || entities.some((entity) => entity.type !== 'line')) {
+    throw new Error('The extrusion needs one closed line loop or one circle.')
+  }
+  const points = new Map(sketch.points.map((point) => [point.id, point]))
+  const unused = new Map(entities.map((entity) => [entity.id, entity]))
+  const first = entities[0]
+  if (first.type !== 'line') throw new Error('The extrusion profile is invalid.')
+  const orderedIds = [first.startPointId, first.endPointId]
+  unused.delete(first.id)
+  while (unused.size) {
+    const current = orderedIds.at(-1)!
+    const next = [...unused.values()].find((entity) => entity.type === 'line' && (entity.startPointId === current || entity.endPointId === current))
+    if (!next || next.type !== 'line') throw new Error('The sketch line loop is disconnected.')
+    orderedIds.push(next.startPointId === current ? next.endPointId : next.startPointId)
+    unused.delete(next.id)
+  }
+  if (orderedIds.at(-1) !== orderedIds[0] || orderedIds.length < 4) throw new Error('The extrusion sketch must be a closed line loop.')
+  const profilePoints = orderedIds.slice(0, -1).map((id): [number, number] => {
+    const point = points.get(id)
+    if (!point) throw new Error('The extrusion sketch references a missing point.')
+    return [point.x, point.y]
+  })
+  return { type: 'polyline', points: profilePoints }
+}
+
+function buildFeaturesFromDocument(document: CadFeatureDocument): SketchExtrudeFeature[] {
+  const sketches = new Map(document.features.filter((feature) => feature.type === 'sketch').map((feature) => [feature.id, feature]))
+  const planes = new Map(document.features.filter((feature) => feature.type === 'referencePlane').map((feature) => [feature.id, feature]))
+  const resolveSupport = (support: SketchSupportPlane): Pick<SketchExtrudeFeature, 'plane' | 'planeOffset' | 'planeAngle' | 'planeAngleAxis'> => {
+    if (support.kind === 'principal') return { plane: support.plane }
+    if (support.kind === 'planarFace') throw new Error('Sketching on a model face is not available in this build yet.')
+    const reference = planes.get(support.featureId)
+    if (!reference) throw new Error('The sketch reference plane is missing.')
+    const base = resolveSupport(reference.reference)
+    return {
+      ...base,
+      planeOffset: (base.planeOffset ?? 0) + reference.offset,
+      ...(reference.angle ? {
+        planeAngle: (base.planeAngle ?? 0) + reference.angle.degrees,
+        planeAngleAxis: reference.angle.axis === 'v' ? 'vertical' as const : 'horizontal' as const,
+      } : {}),
+    }
+  }
+  return document.features.filter((feature) => feature.type === 'extrude').map((feature) => {
+    const sketch = sketches.get(feature.sketchId)
+    if (!sketch) throw new Error('The extrusion references a missing sketch.')
+    return {
+      id: feature.id,
+      type: 'sketchExtrude',
+      name: feature.name,
+      ...resolveSupport(sketch.support),
+      profile: sketchProfileFromDocument(sketch.sketch),
+      operation: feature.operation,
+      length: feature.distance,
+      reversed: feature.reversed,
+    }
+  })
+}
+
+function makeFeatureModelShape(featureModelInput: CadFeatureHistory): CadShape {
+  const featureModel = normalizeCadFeatureDocument(featureModelInput)
+  const buildFeatures = buildFeaturesFromDocument(featureModel)
   let result: Solid | null = null
   try {
-    for (const feature of featureModel.features) {
+    for (const feature of buildFeatures) {
       const tool = makeSketchExtrusion(feature)
       if (!result) {
         result = tool
@@ -807,8 +886,8 @@ function makeFeatureModelShape(featureModelInput: CadFeatureModel): CadShape {
   }
 }
 
-async function createFeatureModel(featureModelInput: CadFeatureModel): Promise<ImportedBodyData> {
-  const featureModel = validateCadFeatureModel(featureModelInput)
+async function createFeatureModel(featureModelInput: CadFeatureHistory): Promise<ImportedBodyData> {
+  const featureModel = validateFeatureHistory(featureModelInput)
   await initializeCadKernel()
   const bodyId = crypto.randomUUID()
   const body = registerBodyAfterMeshing(bodyId, getFeatureModelFileName(featureModel), makeFeatureModelShape(featureModel))
@@ -816,9 +895,9 @@ async function createFeatureModel(featureModelInput: CadFeatureModel): Promise<I
   return { ...body, featureModel }
 }
 
-async function updateFeatureModel(bodyId: string, featureModelInput: CadFeatureModel): Promise<ImportedBodyData> {
+async function updateFeatureModel(bodyId: string, featureModelInput: CadFeatureHistory): Promise<ImportedBodyData> {
   getBody(bodyId)
-  const featureModel = validateCadFeatureModel(featureModelInput)
+  const featureModel = validateFeatureHistory(featureModelInput)
   await initializeCadKernel()
   const replacement = makeFeatureModelShape(featureModel)
   const fileName = getFeatureModelFileName(featureModel)
