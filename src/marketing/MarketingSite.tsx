@@ -22,6 +22,18 @@ interface GuideArticle {
 
 const guideArticles: GuideArticle[] = [
   {
+    slug: 'convert-step-to-stl-online',
+    title: 'How to convert STEP to STL online without uploading your CAD file',
+    description: 'Convert STEP or STP to STL in your browser with CAD File Lab. Follow the local export workflow and learn what happens to geometry, units and precision.',
+    category: 'Conversion', readingTime: '5 min read',
+    sections: [
+      { heading: 'Why convert a STEP file to STL?', paragraphs: ['STEP and STP files store mathematical CAD surfaces and solid topology. STL describes the surface as triangles, which makes it useful for many 3D printing slicers and mesh viewers. A STEP-to-STL conversion produces a mesh representation; it does not preserve editable CAD faces, feature history or sketch dimensions.', 'Use the original STEP model as your engineering source. Treat the STL as an export for a particular downstream task.'] },
+      { heading: 'Convert STEP to STL in CAD File Lab', paragraphs: ['Open the CAD File Lab workspace and choose a .step or .stp file from your device. Wait for the 3D viewer to finish loading, then orbit and inspect the model. CAD File Lab processes the file in your browser rather than uploading it to a conversion server.', 'Open Convert / Export, select STL as the output format, choose visible or selected bodies as the scope, and download the new mesh file. Your original STEP file is not overwritten.'], bullets: ['Open the STEP/STP model in the online CAD viewer.', 'Inspect the bodies and check which ones are visible.', 'Choose STL in Convert / Export and download the converted mesh.', 'Open the STL in the receiving application and verify scale and geometry.'] },
+      { heading: 'Check dimensions, units and surface quality', paragraphs: ['STL files do not have a standard unit declaration. Confirm a known dimension in your slicer or receiving program instead of assuming millimetres are interpreted automatically. Curved surfaces become triangles, so visually inspect cylinders, fillets, thin walls and holes after conversion.', 'If your next tool accepts exact CAD and you need to retain mathematical surfaces, export STEP rather than STL. CAD File Lab can preserve exact STEP/BREP geometry for supported editable CAD sources.'] },
+      { heading: 'Can you convert STL back to STEP?', paragraphs: ['A mesh-to-STEP export does not recover the original sketches, constraints or CAD design intent. Recognizing analytic surfaces from a triangle mesh is a different reverse-engineering task. CAD File Lab does not present mesh reconstruction as an automatic feature.'] },
+    ],
+  },
+  {
     slug: 'open-and-inspect-step-files',
     title: 'How to open and inspect STEP files privately in your browser',
     description: 'A practical workflow for opening STEP and STP models, navigating assemblies and inspecting individual bodies without uploading the file.',
@@ -147,10 +159,13 @@ function NotFoundPage() {
 
 function setPageMetadata(path: string) {
   const guide = guideArticles.find((item) => path === `/guides/${item.slug}`)
-  const title = guide?.title ?? (path === '/guides' ? '3D file guides' : path === '/formats' ? 'Supported 3D file formats' : path === '/about' ? 'About CAD File Lab' : path === '/support' ? 'CAD File Lab support' : 'CAD File Lab')
-  const description = guide?.description ?? 'Private browser-based tools and practical guidance for inspecting, measuring, converting and simplifying 3D files.'
+  const title = guide?.title ?? (path === '/' ? 'Online STEP & STL Viewer and 3D Converter' : path === '/guides' ? 'STEP, STL and 3D file guides' : path === '/formats' ? 'Supported STEP, STL and 3D file formats' : path === '/about' ? 'About CAD File Lab' : path === '/support' ? 'CAD File Lab support' : 'CAD File Lab')
+  const description = guide?.description ?? (path === '/' ? 'Open STEP, STP and STL files in a free online 3D viewer. Measure CAD models and convert STEP to STL privately in your browser—no file upload or account.' : 'Private browser-based tools and practical guidance for inspecting, measuring, converting and simplifying 3D files.')
   document.title = `${title} | CAD File Lab`
   document.querySelector('meta[name="description"]')?.setAttribute('content', description)
+  document.querySelector('meta[property="og:title"]')?.setAttribute('content', document.title)
+  document.querySelector('meta[property="og:description"]')?.setAttribute('content', description)
+  document.querySelector('meta[property="og:url"]')?.setAttribute('content', `https://www.cadfilelab.com${path === '/' ? '/' : path}`)
   document.querySelector('link[rel="canonical"]')?.setAttribute('href', `https://www.cadfilelab.com${path === '/' ? '/' : path}`)
 }
 
