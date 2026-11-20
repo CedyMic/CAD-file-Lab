@@ -18,6 +18,7 @@ import {
   createCadFeatureModel,
   exportExactCadFile,
   modifyCadFaceOffset,
+  modifyCadEdge,
   stepCadEditHistory,
   importStepFile,
   restoreCadProject,
@@ -548,6 +549,8 @@ function App() {
   const [modifyEdgeSelection, setModifyEdgeSelection] = useState<import('./viewer/CadViewport').ModifyEdgeSelection | null>(null)
   const [modifySelectionMode, setModifySelectionMode] = useState<'face' | 'edge'>('face')
   const [modifyDistance, setModifyDistance] = useState(5)
+  const [edgeTreatment, setEdgeTreatment] = useState<'fillet' | 'chamfer'>('fillet')
+  const [edgeSize, setEdgeSize] = useState(2)
   const [modifyPreview, setModifyPreview] = useState<ImportedCadBody | null>(null)
   const [modifyError, setModifyError] = useState<string | null>(null)
   const [isModifying, setIsModifying] = useState(false)
@@ -626,10 +629,10 @@ function App() {
   }, [model, selectedPart])
   const visibleParts = model?.renderParts.filter((part) => !hiddenPartIds.has(part.id)) ?? []
   const exportParts = exportScope === 'selected' ? selectedParts : visibleParts
-  const displayedModel = activeTool === 'modify' && modifyPreview && modifyFaceSelection && Number.isFinite(modifyDistance) && modifyDistance !== 0 ? modifyPreview : model
+  const displayedModel = activeTool === 'modify' && modifyPreview && (modifySelectionMode === 'face' ? !!modifyFaceSelection && Number.isFinite(modifyDistance) && modifyDistance !== 0 : !!modifyEdgeSelection && Number.isFinite(edgeSize) && edgeSize > 0) ? modifyPreview : model
 
   useEffect(() => {
-    if (activeTool !== 'modify' || !model?.editable || !modifyFaceSelection || !Number.isFinite(modifyDistance) || modifyDistance === 0) {
+    if (activeTool !== 'modify' || modifySelectionMode !== 'face' || !model?.editable || !modifyFaceSelection || !Number.isFinite(modifyDistance) || modifyDistance === 0) {
       return
     }
     let cancelled = false
@@ -650,7 +653,44 @@ function App() {
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [activeTool, model, modifyDistance, modifyFaceSelection])
+  }, [activeTool, model, modifyDistance, modifyFaceSelection, modifySelectionMode])
+
+  useEffect(() => {
+    if (activeTool !== 'modify' || modifySelectionMode !== 'edge' || !model?.editable || !modifyEdgeSelection || !Number.isFinite(edgeSize) || edgeSize <= 0) return
+    let cancelled = false
+    const timeout = window.setTimeout(() => {
+      void modifyCadEdge(model.bodyId, modifyEdgeSelection.edgeId, model.revision, edgeTreatment, edgeSize, true)
+        .then((preview) => {
+          if (cancelled) return
+          setModifyPreview(preview)
+          setModifyError(null)
+        })
+        .catch((caughtError: unknown) => {
+          if (cancelled) return
+          setModifyPreview(null)
+          setModifyError(caughtError instanceof Error ? caughtError.message : 'Edge preview failed.')
+        })
+    }, 180)
+    return () => { cancelled = true; window.clearTimeout(timeout) }
+  }, [activeTool, model, modifyEdgeSelection, modifySelectionMode, edgeTreatment, edgeSize])
+
+  async function applyEdgeTreatment() {
+    if (!model?.editable || !modifyEdgeSelection || !modifyPreview || isModifying) return
+    setIsModifying(true)
+    setModifyError(null)
+    try {
+      const modified = await modifyCadEdge(model.bodyId, modifyEdgeSelection.edgeId, model.revision, edgeTreatment, edgeSize)
+      installModel(modified)
+      setModifyFaceSelection(null)
+      setModifyEdgeSelection(null)
+      setModifyPreview(null)
+      setStatus(`${modified.directEdits?.at(-1)?.name ?? 'Edge treatment'} applied locally`)
+    } catch (caughtError) {
+      setModifyError(caughtError instanceof Error ? caughtError.message : 'Edge treatment could not be applied.')
+    } finally {
+      setIsModifying(false)
+    }
+  }
 
   async function applyMoveFace() {
     if (!model?.editable || !modifyFaceSelection) return
@@ -1782,19 +1822,30 @@ function App() {
             </div>}
             <button type="button" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}>Clear selection</button>
           </section>}
-          {activeTool === 'modify' && <section className="modify-manager" aria-label="Move Face PropertyManager">
+          {activeTool === 'modify' && <section className="modify-manager" aria-label="CAD modification PropertyManager">
             <header>
-              <strong>{modifySelectionMode === 'face' ? 'Move Face' : 'Edge selection'}</strong>
+              <strong>{modifySelectionMode === 'face' ? 'Move Face' : edgeTreatment === 'fillet' ? 'Fillet' : 'Chamfer'}</strong>
               <span>
                 {modifySelectionMode === 'face' && <button type="button" aria-label="Apply Move Face" title="Apply" disabled={!modifyFaceSelection || !modifyPreview || isModifying} onClick={() => { void applyMoveFace() }}>✓</button>}
+                {modifySelectionMode === 'edge' && <button type="button" aria-label={`Apply ${edgeTreatment}`} title="Apply" disabled={!modifyEdgeSelection || !modifyPreview || !!modifyError || isModifying || !Number.isFinite(edgeSize) || edgeSize <= 0} onClick={() => { void applyEdgeTreatment() }}>✓</button>}
                 <button type="button" aria-label="Close geometry selection" title="Close" onClick={() => { setModifyFaceSelection(null); setModifyEdgeSelection(null); setModifyPreview(null); setModifyError(null); setActiveTool('view') }}>×</button>
               </span>
             </header>
             <div className="modify-mode-tabs" role="toolbar" aria-label="Geometry selection type">
-              <button className={modifySelectionMode === 'face' ? 'selected' : ''} type="button" onClick={() => { setModifySelectionMode('face'); setModifyEdgeSelection(null) }}>Face</button>
+              <button className={modifySelectionMode === 'face' ? 'selected' : ''} type="button" onClick={() => { setModifySelectionMode('face'); setModifyEdgeSelection(null); setModifyPreview(null); setModifyError(null) }}>Face</button>
               <button className={modifySelectionMode === 'edge' ? 'selected' : ''} type="button" onClick={() => { setModifySelectionMode('edge'); setModifyFaceSelection(null); setModifyPreview(null) }}>Edge</button>
             </div>
-            {modifySelectionMode === 'edge' ? <div className="modify-selection-field"><span>Selected CAD edge</span><output>{modifyEdgeSelection ? `Edge ${modifyEdgeSelection.edgeId}` : 'Select an edge in the graphics area'}</output><small>Selection only. Fillet and Chamfer operations will follow in the next phase.</small></div> : <>
+            {modifySelectionMode === 'edge' ? <>
+              <div className="modify-mode-tabs" role="toolbar" aria-label="Edge treatment">
+                <button className={edgeTreatment === 'fillet' ? 'selected' : ''} type="button" onClick={() => { setEdgeTreatment('fillet'); setModifyPreview(null); setModifyError(null) }}>Fillet</button>
+                <button className={edgeTreatment === 'chamfer' ? 'selected' : ''} type="button" onClick={() => { setEdgeTreatment('chamfer'); setModifyPreview(null); setModifyError(null) }}>Chamfer</button>
+              </div>
+              <div className="modify-selection-field"><span>Selected CAD edge</span><output>{modifyEdgeSelection ? `Edge ${modifyEdgeSelection.edgeId}` : 'Select an edge in the graphics area'}</output></div>
+              <label><span>{edgeTreatment === 'fillet' ? 'Radius' : 'Distance'} (mm)</span><input type="number" min="0.01" step="0.1" value={edgeSize} onChange={(event) => { setEdgeSize(Number(event.target.value)); setModifyPreview(null); setModifyError(null) }} /></label>
+              <small>{edgeTreatment === 'fillet' ? 'Round one selected B-Rep edge.' : 'Bevel one selected B-Rep edge.'} The operation changes the exact solid and can be undone.</small>
+              {modifyEdgeSelection && !modifyError && <p className="modify-preview-status">Live preview {modifyPreview ? 'ready' : 'updating…'}</p>}
+              {modifyError && <p className="modify-manager-error" role="alert">{modifyError}</p>}
+            </> : <>
             <div className="modify-mode-tabs" role="toolbar" aria-label="Move Face mode">
               <button className="selected" type="button">Offset</button>
               <button type="button" disabled title="Planned exact operation">Translate</button>
@@ -1863,7 +1914,7 @@ function App() {
                   </li>)}
                 </>}
                 {model?.directEdits?.map((feature) => <li className="feature-tree-feature direct-edit-feature" key={feature.id}>
-                  <span aria-hidden="true">↕</span><strong>{feature.name}</strong><small>Offset {feature.distance.toFixed(2)} mm</small>
+                  <span aria-hidden="true">{feature.type === 'moveFace' ? '↕' : '⌒'}</span><strong>{feature.name}</strong><small>{feature.type === 'moveFace' ? `Offset ${feature.distance.toFixed(2)} mm` : `${feature.type === 'fillet' ? 'Radius' : 'Distance'} ${feature.size.toFixed(2)} mm`}</small>
                 </li>)}
                 {model?.bodySummaries.map((body) => (
                   <li

@@ -82,6 +82,7 @@ interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; 
 interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
 interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
 interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; revision: number; distance: number; preview: boolean }
+interface ModifyEdgeRequest { id: string; action: 'modifyEdge'; bodyId: string; edgeId: number; revision: number; treatment: 'fillet' | 'chamfer'; size: number; preview: boolean }
 interface StepEditHistoryRequest { id: string; action: 'stepEditHistory'; bodyId: string; direction: 'undo' | 'redo' }
 
 type WorkerRequest =
@@ -94,6 +95,7 @@ type WorkerRequest =
   | UpdateFeatureModelRequest
   | ExportExactCadRequest
   | ModifyFaceOffsetRequest
+  | ModifyEdgeRequest
   | StepEditHistoryRequest
   | DisposeBodyRequest
 
@@ -400,6 +402,21 @@ export async function stepCadEditHistory(bodyId: string, direction: 'undo' | 're
   const response = await sendRequest({ id: crypto.randomUUID(), action: 'stepEditHistory', bodyId, direction })
   if (!isImportedCadBody(response) || response.bodyId !== bodyId) {
     throw new Error('The CAD worker returned invalid edit history data.')
+  }
+  return response
+}
+
+export async function modifyCadEdge(
+  bodyId: string,
+  edgeId: number,
+  revision: number,
+  treatment: 'fillet' | 'chamfer',
+  size: number,
+  preview = false,
+): Promise<ImportedCadBody> {
+  const response = await sendRequest({ id: crypto.randomUUID(), action: 'modifyEdge', bodyId, edgeId, revision, treatment, size, preview })
+  if (!isImportedCadBody(response) || response.bodyId !== bodyId) {
+    throw new Error('The CAD worker returned invalid edge modification data.')
   }
   return response
 }

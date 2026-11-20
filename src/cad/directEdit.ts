@@ -7,7 +7,15 @@ export interface MoveFaceFeature {
   distance: number
 }
 
-export type DirectEditFeature = MoveFaceFeature
+export interface EdgeTreatmentFeature {
+  id: string
+  type: 'fillet' | 'chamfer'
+  name: string
+  edgeId: number
+  size: number
+}
+
+export type DirectEditFeature = MoveFaceFeature | EdgeTreatmentFeature
 
 const MAX_FACE_OFFSET_MM = 100_000
 
@@ -22,11 +30,8 @@ export function validateFaceOffset(distance: number) {
 }
 
 export function validateDirectEditFeature(value: DirectEditFeature): DirectEditFeature {
-  if (!value || value.type !== 'moveFace' || value.mode !== 'offset') {
+  if (!value || !['moveFace', 'fillet', 'chamfer'].includes(value.type)) {
     throw new Error('This direct-edit feature is not supported.')
-  }
-  if (!Number.isSafeInteger(value.faceId) || value.faceId <= 0) {
-    throw new Error('Move Face has an invalid face reference.')
   }
   if (typeof value.id !== 'string' || !value.id || value.id.length > 200) {
     throw new Error('Move Face has an invalid feature ID.')
@@ -34,8 +39,35 @@ export function validateDirectEditFeature(value: DirectEditFeature): DirectEditF
   if (typeof value.name !== 'string' || !value.name || value.name.length > 120) {
     throw new Error('Move Face has an invalid feature name.')
   }
-  validateFaceOffset(value.distance)
+  if (value.type === 'moveFace') {
+    if (value.mode !== 'offset' || !Number.isSafeInteger(value.faceId) || value.faceId <= 0) {
+      throw new Error('Move Face has an invalid face reference.')
+    }
+    validateFaceOffset(value.distance)
+  } else {
+    if (!Number.isSafeInteger(value.edgeId) || value.edgeId <= 0) {
+      throw new Error('Edge feature has an invalid edge reference.')
+    }
+    validateEdgeTreatmentSize(value.size)
+  }
   return { ...value }
+}
+
+export function validateEdgeTreatmentSize(value: number) {
+  if (!Number.isFinite(value) || value <= 0 || value > 100_000) {
+    throw new Error('Fillet radius or chamfer distance must be greater than zero and no more than 100,000 mm.')
+  }
+  return value
+}
+
+export function createEdgeTreatmentFeature(type: EdgeTreatmentFeature['type'], edgeId: number, size: number, featureNumber: number): EdgeTreatmentFeature {
+  return validateDirectEditFeature({
+    id: crypto.randomUUID(),
+    type,
+    name: `${type === 'fillet' ? 'Fillet' : 'Chamfer'}${featureNumber}`,
+    edgeId,
+    size,
+  }) as EdgeTreatmentFeature
 }
 
 export function validateDirectEditHistory(value: DirectEditFeature[] | undefined) {
@@ -58,5 +90,5 @@ export function createMoveFaceFeature(
     name: `Move Face${featureNumber}`,
     faceId,
     distance,
-  })
+  }) as MoveFaceFeature
 }

@@ -48,8 +48,10 @@ import {
 } from './exactCadExport'
 import {
   createMoveFaceFeature,
+  createEdgeTreatmentFeature,
   validateDirectEditHistory,
   validateFaceOffset,
+  validateEdgeTreatmentSize,
   type DirectEditFeature,
 } from './directEdit'
 
@@ -113,6 +115,7 @@ interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; 
 interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
 interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
 interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; revision: number; distance: number; preview: boolean }
+interface ModifyEdgeRequest { id: string; action: 'modifyEdge'; bodyId: string; edgeId: number; revision: number; treatment: 'fillet' | 'chamfer'; size: number; preview: boolean }
 interface StepEditHistoryRequest { id: string; action: 'stepEditHistory'; bodyId: string; direction: 'undo' | 'redo' }
 
 type WorkerRequest =
@@ -125,6 +128,7 @@ type WorkerRequest =
   | UpdateFeatureModelRequest
   | ExportExactCadRequest
   | ModifyFaceOffsetRequest
+  | ModifyEdgeRequest
   | StepEditHistoryRequest
   | DisposeBodyRequest
 
@@ -966,6 +970,45 @@ async function modifyFaceOffset(
   }
 }
 
+async function modifyEdge(request: ModifyEdgeRequest): Promise<ImportedBodyData> {
+  const { bodyId, edgeId, revision, treatment, preview } = request
+  if (treatment !== 'fillet' && treatment !== 'chamfer') throw new Error('Unsupported edge treatment.')
+  const size = validateEdgeTreatmentSize(request.size)
+  const currentShape = getBody(bodyId)
+  validateTopologyReference({ bodyId, revision, kind: 'edge', entityId: edgeId }, bodyId, getBodyRevision(bodyId))
+  const selectedEdges = currentShape.edges
+  const matches = selectedEdges.filter((edge) => edge.hashCode === edgeId)
+  selectedEdges.forEach((edge) => edge.delete())
+  if (matches.length !== 1) throw new Error('The selected edge is missing or ambiguous. Select the edge again.')
+
+  let replacement: CadShape
+  try {
+    replacement = (treatment === 'fillet'
+      ? currentShape.asShape3D().fillet((edge) => edge.hashCode === edgeId ? size : null)
+      : currentShape.asShape3D().chamfer((edge) => edge.hashCode === edgeId ? size : null)) as CadShape
+  } catch (error) {
+    throw new Error(`${treatment === 'fillet' ? 'Fillet' : 'Chamfer'} could not be built for this edge and size: ${getErrorMessage(error)}`, { cause: error })
+  }
+
+  const fileName = bodyFileNames.get(bodyId) ?? 'Modified model.step'
+  const history = bodyDirectEdits.get(bodyId) ?? []
+  try {
+    const renderData = createRenderData(bodyId, fileName, replacement)
+    if (preview) return { ...renderData, primitive: bodyPrimitives.get(bodyId), featureModel: bodyFeatureModels.get(bodyId), directEdits: history }
+
+    const beforeGeometry = currentShape.serialize()
+    const nextHistory = [...history, createEdgeTreatmentFeature(treatment, edgeId, size, history.length + 1)]
+    bodies.set(bodyId, replacement)
+    advanceBodyRevision(bodyId)
+    bodyDirectEdits.set(bodyId, nextHistory)
+    bodyEditHistory.set(bodyId, commitEdit(bodyEditHistory.get(bodyId) ?? emptyEditHistory<DirectEditFeature[]>(), { geometry: beforeGeometry, metadata: [...history] }))
+    currentShape.delete()
+    return withEditState({ ...renderData, primitive: bodyPrimitives.get(bodyId), featureModel: bodyFeatureModels.get(bodyId), directEdits: nextHistory })
+  } finally {
+    if (preview || bodies.get(bodyId) !== replacement) replacement.delete()
+  }
+}
+
 async function changeEditHistory(bodyId: string, direction: 'undo' | 'redo'): Promise<ImportedBodyData> {
   const currentShape = getBody(bodyId)
   const history = bodyEditHistory.get(bodyId) ?? emptyEditHistory<DirectEditFeature[]>()
@@ -1101,6 +1144,9 @@ async function handleRequest(
 
     case 'modifyFaceOffset':
       return modifyFaceOffset(request.bodyId, request.faceId, request.revision, request.distance, request.preview)
+
+    case 'modifyEdge':
+      return modifyEdge(request)
 
     case 'stepEditHistory':
       return changeEditHistory(request.bodyId, request.direction)
