@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cad-file-lab",
+  "name": "cad-file-lab-preview",
   "compatibility_date": "2026-07-12",
   "assets": {
     "not_found_handling": "single-page-application"
