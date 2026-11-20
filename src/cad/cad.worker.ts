@@ -48,14 +48,18 @@ import {
 } from './exactCadExport'
 import {
   createMoveFaceFeature,
+  createEdgeTreatmentFeature,
   validateDirectEditHistory,
   validateFaceOffset,
+  validateEdgeTreatmentSize,
   type DirectEditFeature,
 } from './directEdit'
 
 import {
   createAsyncOperationQueue,
 } from '../storage/operationQueue'
+import { commitEdit, emptyEditHistory, stepEditHistory, type EditHistory } from './editHistory'
+import { validateTopologyReference } from './topologySelection'
 
 type CadShape =
   Awaited<ReturnType<typeof importSTEP>>
@@ -110,7 +114,9 @@ interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId
 interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureModel }
 interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
 interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
-interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; distance: number; preview: boolean }
+interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; revision: number; distance: number; preview: boolean }
+interface ModifyEdgeRequest { id: string; action: 'modifyEdge'; bodyId: string; edgeId: number; revision: number; treatment: 'fillet' | 'chamfer'; size: number; preview: boolean }
+interface StepEditHistoryRequest { id: string; action: 'stepEditHistory'; bodyId: string; direction: 'undo' | 'redo' }
 
 type WorkerRequest =
   | ImportStepRequest
@@ -122,10 +128,13 @@ type WorkerRequest =
   | UpdateFeatureModelRequest
   | ExportExactCadRequest
   | ModifyFaceOffsetRequest
+  | ModifyEdgeRequest
+  | StepEditHistoryRequest
   | DisposeBodyRequest
 
 interface ImportedBodyData {
   bodyId: string
+  revision: number
   fileName: string
   editable: boolean
   bodySummaries: Array<{
@@ -145,6 +154,8 @@ interface ImportedBodyData {
   primitive?: CadPrimitive
   featureModel?: CadFeatureModel
   directEdits?: DirectEditFeature[]
+  canUndo?: boolean
+  canRedo?: boolean
 }
 
 interface DisposedBodyData {
@@ -202,6 +213,16 @@ const bodyFeatureModels =
 
 const bodyDirectEdits =
   new Map<string, DirectEditFeature[]>()
+const bodyEditHistory = new Map<string, EditHistory<DirectEditFeature[]>>()
+const bodyRevisions = new Map<string, number>()
+
+function getBodyRevision(bodyId: string) { return bodyRevisions.get(bodyId) ?? 0 }
+function advanceBodyRevision(bodyId: string) { bodyRevisions.set(bodyId, getBodyRevision(bodyId) + 1) }
+
+function withEditState(body: ImportedBodyData): ImportedBodyData {
+  const history = bodyEditHistory.get(body.bodyId)
+  return { ...body, revision: getBodyRevision(body.bodyId), canUndo: Boolean(history?.undo.length), canRedo: Boolean(history?.redo.length) }
+}
 
 const enqueueCadOperation =
   createAsyncOperationQueue()
@@ -388,6 +409,7 @@ function createRenderData(
 
   return {
     bodyId,
+    revision: getBodyRevision(bodyId),
     fileName,
     editable: true,
     bodySummaries,
@@ -465,6 +487,7 @@ function createMeshRenderData(
 
   return {
     bodyId,
+    revision: 1,
     fileName,
     editable: false,
     bodySummaries: parts.map((part, index) => ({
@@ -687,6 +710,8 @@ function disposeBody(
     bodyPrimitives.delete(bodyId)
     bodyFeatureModels.delete(bodyId)
     bodyDirectEdits.delete(bodyId)
+    bodyEditHistory.delete(bodyId)
+    bodyRevisions.delete(bodyId)
   }
 
   return {
@@ -745,9 +770,12 @@ async function updatePrimitive(
     const previous = bodies.get(bodyId)
     bodies.set(bodyId, replacement)
     bodyFileNames.set(bodyId, fileName)
+    advanceBodyRevision(bodyId)
+    bodyEditHistory.delete(bodyId)
+    bodyDirectEdits.delete(bodyId)
     bodyPrimitives.set(bodyId, primitive)
     previous?.delete()
-    return { ...renderData, primitive }
+    return { ...renderData, revision: getBodyRevision(bodyId), primitive }
   } catch (error) {
     replacement.delete()
     throw error
@@ -829,8 +857,11 @@ async function updateFeatureModel(bodyId: string, featureModelInput: CadFeatureM
     bodyFileNames.set(bodyId, fileName)
     bodyFeatureModels.set(bodyId, featureModel)
     bodyPrimitives.delete(bodyId)
+    bodyEditHistory.delete(bodyId)
+    bodyDirectEdits.delete(bodyId)
     previous?.delete()
-    return { ...renderData, featureModel }
+    advanceBodyRevision(bodyId)
+    return { ...renderData, revision: getBodyRevision(bodyId), featureModel }
   } catch (error) {
     replacement.delete()
     throw error
@@ -891,10 +922,12 @@ function buildPlanarFaceOffset(
 async function modifyFaceOffset(
   bodyId: string,
   faceId: number,
+  revision: number,
   distance: number,
   preview: boolean,
 ): Promise<ImportedBodyData> {
   const currentShape = getBody(bodyId)
+  validateTopologyReference({ bodyId, revision, kind: 'face', entityId: faceId }, bodyId, getBodyRevision(bodyId))
   const replacement = buildPlanarFaceOffset(currentShape, faceId, distance)
   const fileName = bodyFileNames.get(bodyId) ?? 'Modified model.step'
   const history = bodyDirectEdits.get(bodyId) ?? []
@@ -913,22 +946,92 @@ async function modifyFaceOffset(
   }
 
   try {
+    const beforeGeometry = currentShape.serialize()
     const renderData = createRenderData(bodyId, fileName, replacement)
     const nextHistory = [
       ...history,
       createMoveFaceFeature(faceId, distance, history.length + 1),
     ]
     bodies.set(bodyId, replacement)
+    advanceBodyRevision(bodyId)
     bodyDirectEdits.set(bodyId, nextHistory)
+    const previousHistory = bodyEditHistory.get(bodyId) ?? emptyEditHistory<DirectEditFeature[]>()
+    bodyEditHistory.set(bodyId, commitEdit(previousHistory, { geometry: beforeGeometry, metadata: [...history] }))
     currentShape.delete()
-    return {
+    return withEditState({
       ...renderData,
       primitive: bodyPrimitives.get(bodyId),
       featureModel: bodyFeatureModels.get(bodyId),
       directEdits: nextHistory,
-    }
+    })
   } catch (error) {
     replacement.delete()
+    throw error
+  }
+}
+
+async function modifyEdge(request: ModifyEdgeRequest): Promise<ImportedBodyData> {
+  const { bodyId, edgeId, revision, treatment, preview } = request
+  if (treatment !== 'fillet' && treatment !== 'chamfer') throw new Error('Unsupported edge treatment.')
+  const size = validateEdgeTreatmentSize(request.size)
+  const currentShape = getBody(bodyId)
+  validateTopologyReference({ bodyId, revision, kind: 'edge', entityId: edgeId }, bodyId, getBodyRevision(bodyId))
+  const selectedEdges = currentShape.edges
+  const matches = selectedEdges.filter((edge) => edge.hashCode === edgeId)
+  selectedEdges.forEach((edge) => edge.delete())
+  if (matches.length !== 1) throw new Error('The selected edge is missing or ambiguous. Select the edge again.')
+
+  let replacement: CadShape
+  try {
+    replacement = (treatment === 'fillet'
+      ? currentShape.asShape3D().fillet((edge) => edge.hashCode === edgeId ? size : null)
+      : currentShape.asShape3D().chamfer((edge) => edge.hashCode === edgeId ? size : null)) as CadShape
+  } catch (error) {
+    throw new Error(`${treatment === 'fillet' ? 'Fillet' : 'Chamfer'} could not be built for this edge and size: ${getErrorMessage(error)}`, { cause: error })
+  }
+
+  const fileName = bodyFileNames.get(bodyId) ?? 'Modified model.step'
+  const history = bodyDirectEdits.get(bodyId) ?? []
+  try {
+    const renderData = createRenderData(bodyId, fileName, replacement)
+    if (preview) return { ...renderData, primitive: bodyPrimitives.get(bodyId), featureModel: bodyFeatureModels.get(bodyId), directEdits: history }
+
+    const beforeGeometry = currentShape.serialize()
+    const nextHistory = [...history, createEdgeTreatmentFeature(treatment, edgeId, size, history.length + 1)]
+    bodies.set(bodyId, replacement)
+    advanceBodyRevision(bodyId)
+    bodyDirectEdits.set(bodyId, nextHistory)
+    bodyEditHistory.set(bodyId, commitEdit(bodyEditHistory.get(bodyId) ?? emptyEditHistory<DirectEditFeature[]>(), { geometry: beforeGeometry, metadata: [...history] }))
+    currentShape.delete()
+    return withEditState({ ...renderData, primitive: bodyPrimitives.get(bodyId), featureModel: bodyFeatureModels.get(bodyId), directEdits: nextHistory })
+  } finally {
+    if (preview || bodies.get(bodyId) !== replacement) replacement.delete()
+  }
+}
+
+async function changeEditHistory(bodyId: string, direction: 'undo' | 'redo'): Promise<ImportedBodyData> {
+  const currentShape = getBody(bodyId)
+  const history = bodyEditHistory.get(bodyId) ?? emptyEditHistory<DirectEditFeature[]>()
+  const current = { geometry: currentShape.serialize(), metadata: [...(bodyDirectEdits.get(bodyId) ?? [])] }
+  const change = stepEditHistory(history, direction, current)
+  const restored = deserializeShape(change.target.geometry).asShape3D()
+  try {
+    if (restored.isNull) throw new Error('The saved CAD edit contains invalid geometry.')
+    const fileName = bodyFileNames.get(bodyId) ?? 'Modified model.step'
+    const renderData = createRenderData(bodyId, fileName, restored)
+    bodies.set(bodyId, restored)
+    advanceBodyRevision(bodyId)
+    bodyDirectEdits.set(bodyId, [...change.target.metadata])
+    bodyEditHistory.set(bodyId, change.history)
+    currentShape.delete()
+    return withEditState({
+      ...renderData,
+      primitive: bodyPrimitives.get(bodyId),
+      featureModel: bodyFeatureModels.get(bodyId),
+      directEdits: [...change.target.metadata],
+    })
+  } catch (error) {
+    restored.delete()
     throw error
   }
 }
@@ -995,8 +1098,9 @@ function registerBodyAfterMeshing(
 
     bodies.set(bodyId, shape)
     bodyFileNames.set(bodyId, fileName)
+    bodyRevisions.set(bodyId, 1)
 
-    return renderData
+    return { ...renderData, revision: 1 }
   } catch (error) {
     shape.delete()
 
@@ -1039,7 +1143,13 @@ async function handleRequest(
       return exportExactCad(request.bodyId, request.format)
 
     case 'modifyFaceOffset':
-      return modifyFaceOffset(request.bodyId, request.faceId, request.distance, request.preview)
+      return modifyFaceOffset(request.bodyId, request.faceId, request.revision, request.distance, request.preview)
+
+    case 'modifyEdge':
+      return modifyEdge(request)
+
+    case 'stepEditHistory':
+      return changeEditHistory(request.bodyId, request.direction)
 
     case 'disposeBody':
       return disposeBody(

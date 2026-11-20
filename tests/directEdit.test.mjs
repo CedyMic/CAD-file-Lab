@@ -5,6 +5,8 @@ import {
   createMoveFaceFeature,
   validateDirectEditHistory,
   validateFaceOffset,
+  createEdgeTreatmentFeature,
+  validateEdgeTreatmentSize,
 } from '../src/cad/directEdit.ts'
 
 test('validates signed Move Face offset distances', () => {
@@ -13,6 +15,16 @@ test('validates signed Move Face offset distances', () => {
   assert.throws(() => validateFaceOffset(0), /non-zero/i)
   assert.throws(() => validateFaceOffset(Number.NaN), /non-zero/i)
   assert.throws(() => validateFaceOffset(100_001), /100,000 mm/i)
+})
+
+test('validates and records exact edge fillet/chamfer features', () => {
+  assert.equal(validateEdgeTreatmentSize(2.5), 2.5)
+  assert.throws(() => validateEdgeTreatmentSize(-1), /greater than zero/)
+  assert.throws(() => validateEdgeTreatmentSize(Number.NaN), /greater than zero/)
+  const feature = createEdgeTreatmentFeature('fillet', 19, 2, 1)
+  assert.equal(feature.name, 'Fillet1')
+  assert.deepEqual(validateDirectEditHistory([feature]), [feature])
+  assert.equal(createEdgeTreatmentFeature('chamfer', 19, 1, 2).name, 'Chamfer2')
 })
 
 test('creates compact serializable Move Face history entries', () => {
