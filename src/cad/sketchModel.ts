@@ -47,10 +47,12 @@ export function createSketchEditorState(document?: SketchDocument): SketchEditor
 
 export type SketchAction =
   | { type: 'addEntity'; entity: SketchEntity }
+  | { type: 'addRectangle'; idPrefix: string; corners: [SketchPoint, SketchPoint] }
   | { type: 'updateEntity'; entity: SketchEntity }
   | { type: 'removeEntities'; entityIds: string[] }
   | { type: 'addConstraint'; constraint: SketchConstraint }
   | { type: 'addDimension'; dimension: SketchDimension }
+  | { type: 'setDimension'; dimensionId: string; value: number }
   | { type: 'select'; entityId: string; additive?: boolean }
   | { type: 'clearSelection' }
   | { type: 'undo' }
@@ -58,6 +60,37 @@ export type SketchAction =
 
 function commit(state: SketchEditorState, document: SketchDocument): SketchEditorState {
   return { document: validateSketchDocument(document), selectedEntityIds: state.selectedEntityIds, undoStack: [...state.undoStack, cloneDocument(state.document)].slice(-100), redoStack: [] }
+}
+
+/** A first, deliberately bounded constraint solver for line-based sketches.
+ * Driving dimensions preserve the first endpoint while moving the second.
+ * Fixed geometry is never moved. More complex CAD relations need a full solver.
+ */
+export function solveSketchDocument(input: SketchDocument): SketchDocument {
+  const document = cloneDocument(input)
+  const fixed = new Set(document.constraints.filter((c) => c.type === 'fixed').map((c) => 'entityId' in c ? c.entityId : ''))
+  const getLine = (id: string) => document.entities.find((e): e is Extract<SketchEntity, { type: 'line' }> => e.id === id && e.type === 'line')
+  for (let iteration = 0; iteration < 4; iteration++) {
+    for (const constraint of document.constraints) {
+      if (!('entityId' in constraint) || fixed.has(constraint.entityId)) continue
+      const line = getLine(constraint.entityId)
+      if (!line) continue
+      if (constraint.type === 'horizontal') line.end = [line.end[0], line.start[1]]
+      if (constraint.type === 'vertical') line.end = [line.start[0], line.end[1]]
+    }
+    for (const dimension of document.dimensions) {
+      if (!('entityId' in dimension) || fixed.has(dimension.entityId)) continue
+      const entity = document.entities.find((item) => item.id === dimension.entityId)
+      if (!entity) continue
+      if ((dimension.type === 'radius' || dimension.type === 'diameter') && (entity.type === 'circle' || entity.type === 'arc')) entity.radius = dimension.type === 'diameter' ? dimension.value / 2 : dimension.value
+      if (dimension.type === 'length' && entity.type === 'line') {
+        const dx = entity.end[0] - entity.start[0]; const dy = entity.end[1] - entity.start[1]
+        const length = Math.hypot(dx, dy)
+        if (length > 1e-8) entity.end = [entity.start[0] + dx * dimension.value / length, entity.start[1] + dy * dimension.value / length]
+      }
+    }
+  }
+  return validateSketchDocument(document)
 }
 
 export function reduceSketch(state: SketchEditorState, action: SketchAction): SketchEditorState {
@@ -77,9 +110,22 @@ export function reduceSketch(state: SketchEditorState, action: SketchAction): Sk
     return { document: next, selectedEntityIds: [], undoStack: [...state.undoStack, cloneDocument(state.document)].slice(-100), redoStack: state.redoStack.slice(1) }
   }
   if (action.type === 'addEntity') return commit(state, { ...state.document, entities: [...state.document.entities, action.entity] })
-  if (action.type === 'updateEntity') return commit(state, { ...state.document, entities: state.document.entities.map((entity) => entity.id === action.entity.id ? action.entity : entity) })
+  if (action.type === 'addRectangle') {
+    const [a, b] = action.corners
+    const x1 = Math.min(a[0], b[0]); const x2 = Math.max(a[0], b[0]); const y1 = Math.min(a[1], b[1]); const y2 = Math.max(a[1], b[1])
+    if (x2 - x1 < 1e-8 || y2 - y1 < 1e-8) return state
+    const corners: SketchPoint[] = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+    const entities: SketchEntity[] = corners.map((start, index) => ({ id: `${action.idPrefix}-${index}`, type: 'line', start, end: corners[(index + 1) % 4] }))
+    const constraints: SketchConstraint[] = entities.map((entity, index) => ({ id: `${action.idPrefix}-orientation-${index}`, type: index % 2 === 0 ? 'horizontal' : 'vertical', entityId: entity.id }))
+    return commit(state, { ...state.document, entities: [...state.document.entities, ...entities], constraints: [...state.document.constraints, ...constraints] })
+  }
+  if (action.type === 'updateEntity') return commit(state, solveSketchDocument({ ...state.document, entities: state.document.entities.map((entity) => entity.id === action.entity.id ? action.entity : entity) }))
   if (action.type === 'addConstraint') return commit(state, { ...state.document, constraints: [...state.document.constraints, action.constraint] })
-  if (action.type === 'addDimension') return commit(state, { ...state.document, dimensions: [...state.document.dimensions, action.dimension] })
+  if (action.type === 'addDimension') return commit(state, solveSketchDocument({ ...state.document, dimensions: [...state.document.dimensions, action.dimension] }))
+  if (action.type === 'setDimension') {
+    if (!Number.isFinite(action.value) || action.value <= 0 || !state.document.dimensions.some((dimension) => dimension.id === action.dimensionId)) return state
+    return commit(state, solveSketchDocument({ ...state.document, dimensions: state.document.dimensions.map((dimension) => dimension.id === action.dimensionId ? { ...dimension, value: action.value } : dimension) }))
+  }
   const removed = new Set(action.entityIds)
   return commit(state, {
     ...state.document,

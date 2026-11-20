@@ -311,10 +311,7 @@ function SketchCreator({ model, disabled, onChange, onBuild, onCancel, initialSt
     if (tool === 'circle') {
       dispatchSketch({ type: 'addEntity', entity: { id: `circle-${crypto.randomUUID()}`, type: 'circle', center: drag.start, radius: Math.hypot(end[0] - drag.start[0], end[1] - drag.start[1]) } })
     } else if (tool === 'rectangle') {
-      const x1 = Math.min(drag.start[0], end[0]); const x2 = Math.max(drag.start[0], end[0])
-      const y1 = Math.min(drag.start[1], end[1]); const y2 = Math.max(drag.start[1], end[1])
-      const corners: Array<[number, number]> = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
-      corners.forEach((start, index) => dispatchSketch({ type: 'addEntity', entity: { id: `line-${crypto.randomUUID()}`, type: 'line', start, end: corners[(index + 1) % corners.length] } }))
+      dispatchSketch({ type: 'addRectangle', idPrefix: `rectangle-${crypto.randomUUID()}`, corners: [drag.start, end] })
     }
     setDrag({ start: drag.start, end })
   }
@@ -351,7 +348,9 @@ function SketchCreator({ model, disabled, onChange, onBuild, onCancel, initialSt
     const updateLineLength = (entity: Extract<SketchEntity, { type: 'line' }>, length: number) => {
       const current = Math.hypot(entity.end[0] - entity.start[0], entity.end[1] - entity.start[1])
       if (!Number.isFinite(length) || length <= 0 || current <= 0) return
-      dispatchSketch({ type: 'updateEntity', entity: { ...entity, end: [entity.start[0] + (entity.end[0] - entity.start[0]) * length / current, entity.start[1] + (entity.end[1] - entity.start[1]) * length / current] } })
+      const dimension = sketchState.document.dimensions.find((item) => item.type === 'length' && item.entityId === entity.id)
+      if (dimension) dispatchSketch({ type: 'setDimension', dimensionId: dimension.id, value: length })
+      else dispatchSketch({ type: 'addDimension', dimension: { id: `dimension-${crypto.randomUUID()}`, type: 'length', entityId: entity.id, value: length, position: [(entity.start[0] + entity.end[0]) / 2, (entity.start[1] + entity.end[1]) / 2 - 12] } })
     }
     const selectedLines = sketchState.document.entities.filter((entity): entity is Extract<SketchEntity, { type: 'line' }> => entity.type === 'line' && sketchState.selectedEntityIds.includes(entity.id))
     const applySingleLineRelation = (type: 'horizontal' | 'vertical') => {
