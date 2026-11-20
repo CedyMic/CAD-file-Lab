@@ -79,25 +79,29 @@ textarea:focus-visible {
 
 .cad-ribbon {
   min-width: 0;
-  padding: 6px 12px;
+  padding: 5px 12px;
   display: flex;
-  gap: 8px;
+  align-items: stretch;
+  gap: 6px;
   overflow-x: auto;
   color: #203243;
-  background: #f4f6f8;
+  background: #edf2f6;
   border-bottom: 1px solid #bdc8d2;
 }
 
 .ribbon-group {
   min-width: max-content;
-  padding: 0 10px 14px;
+  padding: 19px 11px 2px;
   position: relative;
-  border-right: 1px solid #cfd7de;
+  border: 1px solid #d7e0e7;
+  border-radius: 6px;
+  background: #f9fbfd;
 }
 
-.ribbon-group:last-child {
-  border-right: 0;
-}
+.ribbon-group:nth-child(3) { order: 1; }
+.ribbon-group:nth-child(2) { order: 2; }
+.ribbon-group:nth-child(1) { order: 3; }
+.ribbon-group:nth-child(4) { order: 4; }
 
 .ribbon-group > div {
   display: flex;
@@ -105,8 +109,9 @@ textarea:focus-visible {
 }
 
 .ribbon-group button {
-  min-width: 88px;
-  padding: 7px 9px;
+  min-width: 79px;
+  min-height: 43px;
+  padding: 5px 9px;
   display: grid;
   gap: 2px;
   color: #33485a;
@@ -119,8 +124,10 @@ textarea:focus-visible {
 .ribbon-group button.active {
   color: #0e4f91;
   background: #e3effb;
-  border-color: #a8c7e6;
+  border-color: #8fb8df;
 }
+
+.ribbon-group button.active { box-shadow: inset 0 -3px #1875bc; }
 
 .ribbon-group button:disabled {
   opacity: 0.48;
@@ -172,11 +179,13 @@ textarea:focus-visible {
 .ribbon-group-label {
   position: absolute;
   right: 10px;
-  bottom: 1px;
+  top: 4px;
   left: 10px;
-  color: #6e7d89;
-  font-size: 9px;
-  text-align: center;
+  color: #56718a;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-align: left;
   text-transform: uppercase;
 }
 
