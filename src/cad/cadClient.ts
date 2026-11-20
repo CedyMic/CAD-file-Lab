@@ -36,6 +36,8 @@ export interface ImportedCadBody {
   primitive?: CadPrimitive
   featureModel?: CadFeatureModel
   directEdits?: DirectEditFeature[]
+  canUndo?: boolean
+  canRedo?: boolean
 }
 
 export interface SerializedCadProject {
@@ -79,6 +81,7 @@ interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; 
 interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
 interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
 interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; distance: number; preview: boolean }
+interface StepEditHistoryRequest { id: string; action: 'stepEditHistory'; bodyId: string; direction: 'undo' | 'redo' }
 
 type WorkerRequest =
   | ImportStepRequest
@@ -90,6 +93,7 @@ type WorkerRequest =
   | UpdateFeatureModelRequest
   | ExportExactCadRequest
   | ModifyFaceOffsetRequest
+  | StepEditHistoryRequest
   | DisposeBodyRequest
 
 interface DisposedCadBody {
@@ -385,6 +389,14 @@ export async function modifyCadFaceOffset(
   })
   if (!isImportedCadBody(response) || response.bodyId !== bodyId) {
     throw new Error('The CAD worker returned invalid Move Face data.')
+  }
+  return response
+}
+
+export async function stepCadEditHistory(bodyId: string, direction: 'undo' | 'redo'): Promise<ImportedCadBody> {
+  const response = await sendRequest({ id: crypto.randomUUID(), action: 'stepEditHistory', bodyId, direction })
+  if (!isImportedCadBody(response) || response.bodyId !== bodyId) {
+    throw new Error('The CAD worker returned invalid edit history data.')
   }
   return response
 }

@@ -18,6 +18,7 @@ import {
   createCadFeatureModel,
   exportExactCadFile,
   modifyCadFaceOffset,
+  stepCadEditHistory,
   importStepFile,
   restoreCadProject,
   serializeCadProject,
@@ -661,6 +662,21 @@ function App() {
       setStatus(`${modified.directEdits?.at(-1)?.name ?? 'Move Face'} applied locally`)
     } catch (caughtError) {
       setModifyError(caughtError instanceof Error ? caughtError.message : 'Move Face could not be applied.')
+    } finally {
+      setIsModifying(false)
+    }
+  }
+
+  async function changeCadEdit(direction: 'undo' | 'redo') {
+    if (!model?.editable || isModifying) return
+    setIsModifying(true)
+    setModifyError(null)
+    try {
+      const changed = await stepCadEditHistory(model.bodyId, direction)
+      installModel(changed)
+      setStatus(`CAD edit ${direction === 'undo' ? 'undone' : 'redone'} locally`)
+    } catch (caughtError) {
+      setModifyError(caughtError instanceof Error ? caughtError.message : 'Could not restore CAD edit history.')
     } finally {
       setIsModifying(false)
     }
@@ -1720,6 +1736,8 @@ function App() {
           <div>
             <button className={activeTool === 'create' ? 'active' : ''} type="button" aria-pressed={activeTool === 'create'} onClick={() => setActiveTool('create')}><strong>Create</strong><span>New body</span></button>
             <button className={activeTool === 'modify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'modify'} disabled={!model?.editable} onClick={() => { setSelectedPartIds(new Set()); setModifyFaceSelection(null); setModifyPreview(null); setModifyError(null); setActiveTool('modify') }} title="Directly edit exact CAD faces"><strong>Modify</strong><span>Move face</span></button>
+            <button type="button" disabled={!model?.canUndo || isModifying} onClick={() => { void changeCadEdit('undo') }} title="Undo the last committed 3D direct edit"><strong>↶ Undo</strong><span>CAD edit</span></button>
+            <button type="button" disabled={!model?.canRedo || isModifying} onClick={() => { void changeCadEdit('redo') }} title="Redo the last undone 3D direct edit"><strong>↷ Redo</strong><span>CAD edit</span></button>
             <button className={activeTool === 'simplify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'simplify'} disabled={!model} onClick={() => { if (exportFormat === 'step' || exportFormat === 'brep') setExportFormat('stl'); setActiveTool('simplify') }}><strong>Simplify</strong><span>Reduce size</span></button>
           </div>
         </div>
