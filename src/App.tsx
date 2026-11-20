@@ -545,6 +545,8 @@ function App() {
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>('auto')
   const [sectionSettings, setSectionSettings] = useState<SectionSettings>(defaultSectionSettings)
   const [modifyFaceSelection, setModifyFaceSelection] = useState<ModifyFaceSelection | null>(null)
+  const [modifyEdgeSelection, setModifyEdgeSelection] = useState<import('./viewer/CadViewport').ModifyEdgeSelection | null>(null)
+  const [modifySelectionMode, setModifySelectionMode] = useState<'face' | 'edge'>('face')
   const [modifyDistance, setModifyDistance] = useState(5)
   const [modifyPreview, setModifyPreview] = useState<ImportedCadBody | null>(null)
   const [modifyError, setModifyError] = useState<string | null>(null)
@@ -632,7 +634,7 @@ function App() {
     }
     let cancelled = false
     const timeout = window.setTimeout(() => {
-      void modifyCadFaceOffset(model.bodyId, modifyFaceSelection.faceId, modifyDistance, true)
+      void modifyCadFaceOffset(model.bodyId, modifyFaceSelection.faceId, model.revision, modifyDistance, true)
         .then((preview) => {
           if (cancelled) return
           setModifyPreview(preview)
@@ -655,9 +657,10 @@ function App() {
     setIsModifying(true)
     setModifyError(null)
     try {
-      const modified = await modifyCadFaceOffset(model.bodyId, modifyFaceSelection.faceId, modifyDistance)
+      const modified = await modifyCadFaceOffset(model.bodyId, modifyFaceSelection.faceId, model.revision, modifyDistance)
       installModel(modified)
       setModifyFaceSelection(null)
+      setModifyEdgeSelection(null)
       setModifyPreview(null)
       setStatus(`${modified.directEdits?.at(-1)?.name ?? 'Move Face'} applied locally`)
     } catch (caughtError) {
@@ -736,6 +739,7 @@ function App() {
       if (event.key === 'Escape') {
         setSelectedPartIds(new Set())
         setModifyFaceSelection(null)
+        setModifyEdgeSelection(null)
         setModifyPreview(null)
         setModifyError(null)
         return
@@ -758,6 +762,7 @@ function App() {
     setModel(nextModel)
     setModifyPreview(null)
     setModifyFaceSelection(null)
+    setModifyEdgeSelection(null)
     setModifyError(null)
     setSelectedPartIds(new Set(nextModel.renderParts[0] ? [nextModel.renderParts[0].id] : []))
     setHiddenPartIds(new Set())
@@ -1735,7 +1740,7 @@ function App() {
           <span className="ribbon-group-label">Model</span>
           <div>
             <button className={activeTool === 'create' ? 'active' : ''} type="button" aria-pressed={activeTool === 'create'} onClick={() => setActiveTool('create')}><strong>Create</strong><span>New body</span></button>
-            <button className={activeTool === 'modify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'modify'} disabled={!model?.editable} onClick={() => { setSelectedPartIds(new Set()); setModifyFaceSelection(null); setModifyPreview(null); setModifyError(null); setActiveTool('modify') }} title="Directly edit exact CAD faces"><strong>Modify</strong><span>Move face</span></button>
+            <button className={activeTool === 'modify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'modify'} disabled={!model?.editable} onClick={() => { setSelectedPartIds(new Set()); setModifySelectionMode('face'); setModifyFaceSelection(null); setModifyEdgeSelection(null); setModifyPreview(null); setModifyError(null); setActiveTool('modify') }} title="Directly edit exact CAD faces"><strong>Modify</strong><span>Move face</span></button>
             <button type="button" disabled={!model?.canUndo || isModifying} onClick={() => { void changeCadEdit('undo') }} title="Undo the last committed 3D direct edit"><strong>↶ Undo</strong><span>CAD edit</span></button>
             <button type="button" disabled={!model?.canRedo || isModifying} onClick={() => { void changeCadEdit('redo') }} title="Redo the last undone 3D direct edit"><strong>↷ Redo</strong><span>CAD edit</span></button>
             <button className={activeTool === 'simplify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'simplify'} disabled={!model} onClick={() => { if (exportFormat === 'step' || exportFormat === 'brep') setExportFormat('stl'); setActiveTool('simplify') }}><strong>Simplify</strong><span>Reduce size</span></button>
@@ -1779,12 +1784,17 @@ function App() {
           </section>}
           {activeTool === 'modify' && <section className="modify-manager" aria-label="Move Face PropertyManager">
             <header>
-              <strong>Move Face</strong>
+              <strong>{modifySelectionMode === 'face' ? 'Move Face' : 'Edge selection'}</strong>
               <span>
-                <button type="button" aria-label="Apply Move Face" title="Apply" disabled={!modifyFaceSelection || !modifyPreview || isModifying} onClick={() => { void applyMoveFace() }}>✓</button>
-                <button type="button" aria-label="Cancel Move Face" title="Cancel" onClick={() => { setModifyFaceSelection(null); setModifyPreview(null); setModifyError(null); setActiveTool('view') }}>×</button>
+                {modifySelectionMode === 'face' && <button type="button" aria-label="Apply Move Face" title="Apply" disabled={!modifyFaceSelection || !modifyPreview || isModifying} onClick={() => { void applyMoveFace() }}>✓</button>}
+                <button type="button" aria-label="Close geometry selection" title="Close" onClick={() => { setModifyFaceSelection(null); setModifyEdgeSelection(null); setModifyPreview(null); setModifyError(null); setActiveTool('view') }}>×</button>
               </span>
             </header>
+            <div className="modify-mode-tabs" role="toolbar" aria-label="Geometry selection type">
+              <button className={modifySelectionMode === 'face' ? 'selected' : ''} type="button" onClick={() => { setModifySelectionMode('face'); setModifyEdgeSelection(null) }}>Face</button>
+              <button className={modifySelectionMode === 'edge' ? 'selected' : ''} type="button" onClick={() => { setModifySelectionMode('edge'); setModifyFaceSelection(null); setModifyPreview(null) }}>Edge</button>
+            </div>
+            {modifySelectionMode === 'edge' ? <div className="modify-selection-field"><span>Selected CAD edge</span><output>{modifyEdgeSelection ? `Edge ${modifyEdgeSelection.edgeId}` : 'Select an edge in the graphics area'}</output><small>Selection only. Fillet and Chamfer operations will follow in the next phase.</small></div> : <>
             <div className="modify-mode-tabs" role="toolbar" aria-label="Move Face mode">
               <button className="selected" type="button">Offset</button>
               <button type="button" disabled title="Planned exact operation">Translate</button>
@@ -1802,6 +1812,7 @@ function App() {
             <small>Positive offsets add material; reversed offsets remove material. Planar faces only in this milestone.</small>
             {modifyFaceSelection && !modifyError && <p className="modify-preview-status">Live preview {modifyPreview ? 'ready' : 'updating…'}</p>}
             {modifyError && <p className="modify-manager-error" role="alert">{modifyError}</p>}
+            </>}
           </section>}
           {activeTool === 'section' && <section className="section-manager" aria-label="Section PropertyManager">
             <header><strong>Section view</strong><button type="button" aria-label="Close Section" onClick={() => setActiveTool('view')}>×</button></header>
@@ -2101,9 +2112,11 @@ function App() {
               onMeasurementChange={setMeasurementSummary}
               onSelectPart={selectPart}
               modifyFaceSelection={activeTool === 'modify' ? modifyFaceSelection : null}
+              modifyEdgeSelection={activeTool === 'modify' ? modifyEdgeSelection : null}
               modifyPreviewOffset={activeTool === 'modify' && modifyPreview ? modifyDistance : 0}
-              onModifyFaceSelect={activeTool === 'modify' ? (selection) => { setModifyFaceSelection(selection); setModifyPreview(null); setModifyError(null) } : undefined}
-              onClearSelection={() => { setSelectedPartIds(new Set()); setModifyFaceSelection(null); setModifyPreview(null); setModifyError(null) }}
+              onModifyFaceSelect={activeTool === 'modify' && modifySelectionMode === 'face' ? (selection) => { setModifyFaceSelection(selection); setModifyPreview(null); setModifyError(null) } : undefined}
+              onModifyEdgeSelect={activeTool === 'modify' && modifySelectionMode === 'edge' ? (selection) => { setModifyEdgeSelection(selection); setModifyError(null) } : undefined}
+              onClearSelection={() => { setSelectedPartIds(new Set()); setModifyFaceSelection(null); setModifyEdgeSelection(null); setModifyPreview(null); setModifyError(null) }}
             />}
 
             {error && (

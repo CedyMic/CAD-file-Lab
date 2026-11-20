@@ -24,6 +24,7 @@ export interface CadRenderPart {
 
 export interface ImportedCadBody {
   bodyId: string
+  revision: number
   fileName: string
   editable: boolean
   bodySummaries: Array<{
@@ -80,7 +81,7 @@ interface UpdatePrimitiveRequest { id: string; action: 'updatePrimitive'; bodyId
 interface CreateFeatureModelRequest { id: string; action: 'createFeatureModel'; featureModel: CadFeatureModel }
 interface UpdateFeatureModelRequest { id: string; action: 'updateFeatureModel'; bodyId: string; featureModel: CadFeatureModel }
 interface ExportExactCadRequest { id: string; action: 'exportExactCad'; bodyId: string; format: ExactCadExportFormat }
-interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; distance: number; preview: boolean }
+interface ModifyFaceOffsetRequest { id: string; action: 'modifyFaceOffset'; bodyId: string; faceId: number; revision: number; distance: number; preview: boolean }
 interface StepEditHistoryRequest { id: string; action: 'stepEditHistory'; bodyId: string; direction: 'undo' | 'redo' }
 
 type WorkerRequest =
@@ -376,6 +377,7 @@ export async function exportExactCadFile(
 export async function modifyCadFaceOffset(
   bodyId: string,
   faceId: number,
+  revision: number,
   distance: number,
   preview = false,
 ): Promise<ImportedCadBody> {
@@ -384,6 +386,7 @@ export async function modifyCadFaceOffset(
     action: 'modifyFaceOffset',
     bodyId,
     faceId,
+    revision,
     distance,
     preview,
   })

@@ -72,6 +72,8 @@ interface CadViewportProps {
   measurementMode?: MeasurementMode
   modifyFaceSelection?: ModifyFaceSelection | null
   onModifyFaceSelect?: (selection: ModifyFaceSelection) => void
+  modifyEdgeSelection?: ModifyEdgeSelection | null
+  onModifyEdgeSelect?: (selection: ModifyEdgeSelection) => void
   modifyPreviewOffset?: number
 }
 
@@ -81,6 +83,12 @@ export interface ModifyFaceSelection {
   point: MeasurementPoint
   normal: MeasurementPoint
   surfaceTriangles: MeasurementPoint[]
+}
+
+export interface ModifyEdgeSelection {
+  partId: string
+  edgeId: number
+  vertices: MeasurementPoint[]
 }
 
 export type MeasurementMode = 'auto' | 'point' | 'face' | 'edge'
@@ -254,6 +262,7 @@ function ImportedPart({
   onMeasurePoint,
   onMeasureLine,
   onModifyFaceSelect,
+  onModifyEdgeSelect,
   measurementMode,
 }: {
   part: CadRenderPart
@@ -267,6 +276,7 @@ function ImportedPart({
   onMeasurePoint?: (sample: FaceSample) => void
   onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number, entityId: string) => void
   onModifyFaceSelect?: (selection: ModifyFaceSelection) => void
+  onModifyEdgeSelect?: (selection: ModifyEdgeSelection) => void
   measurementMode: MeasurementMode
 }) {
   const faceGeometry =
@@ -455,16 +465,17 @@ function ImportedPart({
         />
       </mesh>
 
-      {(showEdges || onMeasureLine) && !isWireframe && (
+      {(showEdges || onMeasureLine || onModifyEdgeSelect) && !isWireframe && (
         <lineSegments
           geometry={edgeGeometry}
           onClick={(event) => {
-            if (!onMeasureLine) return
+            if (!onMeasureLine && !onModifyEdgeSelect) return
             if (measurementMode === 'point' || measurementMode === 'face') return
             event.stopPropagation()
             const position = edgeGeometry.getAttribute('position')
             const hitIndex = Math.max(0, Math.min(event.index ?? 0, position.count - 2))
             const group = part.edges.edgeGroups?.find((candidate) => hitIndex >= candidate.start && hitIndex < candidate.start + candidate.count)
+            if (!group && onModifyEdgeSelect) return
             const startIndex = group?.start ?? hitIndex
             const count = group?.count ?? 2
             const vertices = Array.from({ length: count }, (_, offset) => {
@@ -475,7 +486,11 @@ function ImportedPart({
             for (let index = 0; index + 1 < vertices.length; index += 2) {
               length += new THREE.Vector3(...vertices[index]).distanceTo(new THREE.Vector3(...vertices[index + 1]))
             }
-            onMeasureLine(vertices[0], vertices[vertices.length - 1], vertices, length, `${part.id}-edge-${group?.edgeId ?? hitIndex}`)
+            if (onModifyEdgeSelect && group) {
+              onModifyEdgeSelect({ partId: part.id, edgeId: group.edgeId, vertices })
+            } else {
+              onMeasureLine?.(vertices[0], vertices[vertices.length - 1], vertices, length, `${part.id}-edge-${group?.edgeId ?? hitIndex}`)
+            }
           }}
         >
           <lineBasicMaterial
@@ -483,7 +498,7 @@ function ImportedPart({
             transparent={
               settings.edgeOpacity < 1
             }
-            opacity={showEdges ? settings.edgeOpacity : 0}
+            opacity={showEdges || onModifyEdgeSelect ? settings.edgeOpacity : 0}
             clippingPlanes={sectionPlane ? [sectionPlane] : undefined}
           />
         </lineSegments>
@@ -515,6 +530,7 @@ function ImportedModel({
   onMeasurePoint,
   onMeasureLine,
   onModifyFaceSelect,
+  onModifyEdgeSelect,
   measurementMode,
   modelPosition,
   sectionPlane,
@@ -529,6 +545,7 @@ function ImportedModel({
   onMeasurePoint?: (sample: FaceSample) => void
   onMeasureLine?: (first: MeasurementPoint, second: MeasurementPoint, vertices: MeasurementPoint[], length: number, entityId: string) => void
   onModifyFaceSelect?: (selection: ModifyFaceSelection) => void
+  onModifyEdgeSelect?: (selection: ModifyEdgeSelection) => void
   measurementMode: MeasurementMode
   modelPosition: THREE.Vector3
   sectionPlane: THREE.Plane | null
@@ -550,6 +567,7 @@ function ImportedModel({
             onMeasurePoint={onMeasurePoint}
             onMeasureLine={onMeasureLine}
             onModifyFaceSelect={onModifyFaceSelect}
+            onModifyEdgeSelect={onModifyEdgeSelect}
             measurementMode={measurementMode}
           />
         )
@@ -623,6 +641,13 @@ function ModifyFaceHighlight({ selection, offset }: { selection: ModifyFaceSelec
     <bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry>
     <meshBasicMaterial color="#ffb21c" transparent opacity={0.5} depthTest={false} side={THREE.DoubleSide} />
   </mesh>
+}
+
+function ModifyEdgeHighlight({ selection }: { selection: ModifyEdgeSelection }) {
+  return <lineSegments renderOrder={25}>
+    <bufferGeometry><bufferAttribute attach="attributes-position" args={[new Float32Array(selection.vertices.flat()), 3]} /></bufferGeometry>
+    <lineBasicMaterial color="#ffb21c" depthTest={false} />
+  </lineSegments>
 }
 
 function MeasurableImportedModel({
@@ -987,7 +1012,9 @@ export function CadViewport({
   onMeasurementChange,
   measurementMode = 'auto',
   modifyFaceSelection = null,
+  modifyEdgeSelection = null,
   onModifyFaceSelect,
+  onModifyEdgeSelect,
   modifyPreviewOffset = 0,
 }: CadViewportProps) {
   const [measurementResetId, setMeasurementResetId] = useState(0)
@@ -1158,6 +1185,7 @@ export function CadViewport({
               partOpacities={partOpacities}
               onSelectPart={onSelectPart}
               onModifyFaceSelect={onModifyFaceSelect}
+              onModifyEdgeSelect={onModifyEdgeSelect}
               modelPosition={modelPosition}
               sectionPlane={sectionPlane}
             />
@@ -1172,6 +1200,7 @@ export function CadViewport({
             color="#05090d"
           />}
           {modifyFaceSelection && <ModifyFaceHighlight selection={modifyFaceSelection} offset={modifyPreviewOffset} />}
+          {modifyEdgeSelection && <ModifyEdgeHighlight selection={modifyEdgeSelection} />}
         </>
       ) : (
         <TestModel
