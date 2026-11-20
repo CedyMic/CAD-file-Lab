@@ -29,7 +29,7 @@ import {
 } from './cad/cadClient'
 import type { CadPrimitive } from './cad/primitive'
 import type { CadFeatureModel, SketchExtrudeFeature } from './cad/featureModel'
-import { createSketchEditorState, reduceSketch, type SketchEntity } from './cad/sketchModel'
+import { createSketchEditorState, reduceSketch, snapSketchPoint, type SketchEntity } from './cad/sketchModel'
 
 import {
   CAD_LAB_PROJECT_EXTENSION,
@@ -221,10 +221,10 @@ function FeatureModelEditor({ model, disabled, onChange, onBuild }: {
 
 void FeatureModelEditor
 
-function SketchCreator({ model, disabled, onChange, onBuild }: {
-  model: CadFeatureModel; disabled: boolean; onChange: (model: CadFeatureModel) => void; onBuild: () => void
+function SketchCreator({ model, disabled, onChange, onBuild, onCancel, initialStage = 'plane' }: {
+  model: CadFeatureModel; disabled: boolean; onChange: (model: CadFeatureModel) => void; onBuild: () => void; onCancel: () => void; initialStage?: 'plane' | 'extrude'
 }) {
-  const [stage, setStage] = useState<'plane' | 'sketch' | 'extrude'>('plane')
+  const [stage, setStage] = useState<'plane' | 'sketch' | 'extrude'>(initialStage)
   const [plane, setPlane] = useState<SketchExtrudeFeature['plane']>('XY')
   const [planeOffset, setPlaneOffset] = useState(0)
   const [planeAngle, setPlaneAngle] = useState(0)
@@ -298,13 +298,9 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     return [local.x, local.y]
   }
   const snappedLinePoint = (raw: [number, number]): [number, number] => {
-    const endpoint = linePoints.find((candidate) => Math.hypot(raw[0] - candidate[0], raw[1] - candidate[1]) <= 10)
-    if (endpoint) return endpoint
-    const previous = linePoints.at(-1)
-    if (!previous) return raw
-    if (Math.abs(raw[0] - previous[0]) <= 7) return [previous[0], raw[1]]
-    if (Math.abs(raw[1] - previous[1]) <= 7) return [raw[0], previous[1]]
-    return raw
+    const existing = snapSketchPoint(raw, sketchState.document, linePoints.at(-1), 9).point
+    const endpoint = linePoints.find((candidate) => Math.hypot(existing[0] - candidate[0], existing[1] - candidate[1]) <= 9)
+    return endpoint ?? existing
   }
   const finish = (end: [number, number]) => {
     if (!drag) return
@@ -323,7 +319,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
     setDrag({ start: drag.start, end })
   }
   if (stage === 'plane') return <section className="sketch-workflow plane-stage">
-    <span className="panel-label">New part · Select sketch plane</span>
+    <span className="panel-label">Select sketch plane</span>
     <p>Choose a plane, then draw the first sketch with the mouse.</p>
     <div className="plane-picker">
       {([['XY', 'Top'], ['XZ', 'Front'], ['YZ', 'Right']] as const).map(([value, label]) =>
@@ -338,7 +334,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       <label><span>Rotation axis</span><select value={planeAngleAxis} onChange={(event) => setPlaneAngleAxis(event.target.value as 'horizontal' | 'vertical')}><option value="horizontal">Horizontal sketch axis</option><option value="vertical">Vertical sketch axis</option></select></label>
       <small>Use a negative value to offset in the opposite direction.</small>
     </fieldset>}
-    <button className="primary-button" type="button" onClick={startSketch}>Start sketch</button>
+    <div className="sketch-actions"><button type="button" onClick={onCancel}>Cancel</button><button className="primary-button" type="button" onClick={startSketch}>Start sketch</button></div>
   </section>
   if (stage === 'sketch') {
     const origin: [number, number] = [canvasSize.width / 2, canvasSize.height / 2]
@@ -376,7 +372,7 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
       dispatchSketch({ type: 'addConstraint', constraint: { id: `relation-${crypto.randomUUID()}`, type, firstEntityId: first.id, secondEntityId: second.id } })
     }
     return <section className="sketch-workflow">
-      <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={() => setStage('plane')}>Cancel</button></div>
+      <div className="sketch-heading"><div><span className="panel-label">Sketch1 · {plane}{planeOffset ? ` offset ${planeOffset} mm` : ''}</span><strong>Draw a closed profile</strong></div><button type="button" onClick={onCancel}>Cancel</button></div>
       <div className="cad-command-tabs"><button className="selected" type="button">Sketch</button><button type="button" disabled>Features</button></div>
       <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
         <button className={tool === 'select' ? 'selected' : ''} type="button" onClick={() => { setTool('select'); setDrag(null); setHoverPoint(null); setArcPoints([]) }}>↖ Select</button>
@@ -455,12 +451,12 @@ function SketchCreator({ model, disabled, onChange, onBuild }: {
         {sketchState.document.constraints.some((constraint) => ('entityId' in constraint ? constraint.entityId === selectedSketchEntity.id : constraint.firstEntityId === selectedSketchEntity.id || constraint.secondEntityId === selectedSketchEntity.id)) && <div className="sketch-relation-list"><span>Existing relations</span>{sketchState.document.constraints.filter((constraint) => ('entityId' in constraint ? constraint.entityId === selectedSketchEntity.id : constraint.firstEntityId === selectedSketchEntity.id || constraint.secondEntityId === selectedSketchEntity.id)).map((constraint) => <strong key={constraint.id}>{constraint.type}</strong>)}</div>}
         <button type="button" onClick={() => dispatchSketch({ type: 'removeEntities', entityIds: [selectedSketchEntity.id] })}>Delete entity</button>
       </aside>}
-      <small>{tool === 'line' ? 'Click endpoints. Click the first red point to close the profile.' : 'Click and drag in the sketch. Dimensions are displayed on the sketch.'}</small>
+      <small>{tool === 'line' ? 'Click endpoints; align vertically or horizontally with nearby geometry. Click the first red point to close.' : 'Click and drag in the sketch. Dimensions are displayed on the sketch.'}</small>
       <button className="primary-button" type="button" disabled={!drag || (feature.profile.type !== 'polyline' && dx < 1 && dy < 1)} onClick={() => setStage('extrude')}>Exit sketch</button>
     </section>
   }
   return <form className="sketch-workflow" onSubmit={(event) => { event.preventDefault(); onBuild() }}>
-    <div className="cad-command-tabs"><button type="button" onClick={() => setStage('sketch')}>Sketch</button><button className="selected" type="button">Features</button></div>
+    <div className="cad-command-tabs"><button type="button" onClick={() => setStage('sketch')}>Sketch</button><button className="selected" type="button">Features</button><button type="button" onClick={onCancel}>Cancel</button></div>
     <div className="feature-tools" role="toolbar" aria-label="Feature tools"><button className="selected" type="button">Extruded Boss/Base</button><button type="button" disabled>Extruded Cut</button><button type="button" disabled>Revolve</button><button type="button" disabled>Sweep</button><button type="button" disabled>Loft</button><button type="button" disabled>Fillet</button><button type="button" disabled>Pattern</button><button type="button" onClick={() => setStage('plane')}>Reference Geometry</button></div>
     <span className="panel-label">Boss-Extrude</span>
     <div className="sketch-summary"><div><strong>Sketch1</strong><span>{feature.plane}{feature.planeOffset ? ` + ${feature.planeOffset} mm` : ''} · {feature.profile.type === 'rectangle' ? `${feature.profile.width} × ${feature.profile.height} mm` : feature.profile.type === 'circle' ? `Ø ${feature.profile.radius * 2} mm` : `${feature.profile.points.length} line segments`}</span></div><button type="button" onClick={() => setStage('sketch')}>Edit sketch</button></div>
@@ -542,6 +538,7 @@ function App() {
     features: [{ id: 'feature-1', type: 'sketchExtrude', name: 'Boss-Extrude1', plane: 'XY', profile: { type: 'rectangle', width: 100, height: 60 }, operation: 'boss', length: 10, reversed: false }],
   })
   const [featureModelBodyId, setFeatureModelBodyId] = useState<string | null>(null)
+  const [sketchEditor, setSketchEditor] = useState<'new' | 'edit' | null>('new')
   const [measurementSummary, setMeasurementSummary] = useState<MeasurementSummary>({ selections: [] })
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>('auto')
   const [sectionSettings, setSectionSettings] = useState<SectionSettings>(defaultSectionSettings)
@@ -818,6 +815,7 @@ function App() {
       setFeatureModel(nextModel.featureModel)
       setFeatureModelBodyId(nextModel.bodyId)
       setCreateMode('features')
+      setSketchEditor(null)
     } else {
       setFeatureModelBodyId(null)
     }
@@ -914,6 +912,7 @@ function App() {
         ? await updateCadFeatureModel(featureModelBodyId, featureModel)
         : await createCadFeatureModel(featureModel)
       installModel(nextModel)
+      setSketchEditor(null)
       setFileName(nextModel.fileName)
       setStatus(`${nextModel.fileName} feature history rebuilt locally`)
       await releaseSupersededCadBody(previousBodyId, nextModel.bodyId)
@@ -2130,7 +2129,7 @@ function App() {
           </div>
 
           <div
-            className={`viewport-placeholder ${activeTool === 'create' && createMode === 'features' ? 'sketch-mode' : ''}`}
+            className={`viewport-placeholder ${activeTool === 'create' && createMode === 'features' && sketchEditor ? 'sketch-mode' : ''}`}
             onDragOver={(event) => {
               event.preventDefault()
             }}
@@ -2143,8 +2142,8 @@ function App() {
               )
             }}
           >
-            {activeTool === 'create' && createMode === 'features' ? (
-              <SketchCreator model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} />
+            {activeTool === 'create' && createMode === 'features' && sketchEditor ? (
+              <SketchCreator key={sketchEditor} model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} onCancel={() => setSketchEditor(null)} initialStage={sketchEditor === 'edit' ? 'extrude' : 'plane'} />
             ) : <CadViewport
               model={displayedModel}
               settings={
@@ -2369,7 +2368,12 @@ function App() {
                 {isCreatingPrimitive ? 'Building…' : primitiveBodyId && model?.bodyId === primitiveBodyId ? 'Update part' : 'Create part'}
               </button>
               <small>Created locally · Editable dimensions during this session</small>
-              </form> : <section className="primitive-panel"><span className="panel-label">Sketch</span><p>Sketch tools and geometry are shown in the main graphics area. Select an entity there to edit its dimensions here.</p></section>}
+              </form> : <section className="primitive-panel"><span className="panel-label">Features</span>
+                {sketchEditor ? <p>Finish the sketch and extrusion in the graphics area. The solid will remain visible here after building.</p> : <>
+                  <p>The model stays visible while you work. Edit the existing sketch and extrusion dimensions without leaving Create.</p>
+                  {featureModelBodyId && model?.bodyId === featureModelBodyId ? <button type="button" onClick={() => setSketchEditor('edit')}>Edit sketch / extrusion</button> : !model ? <button type="button" onClick={() => setSketchEditor('new')}>Start sketch</button> : <small>Sketch creation on an imported body is not yet supported.</small>}
+                </>}
+              </section>}
             </>
           )}
 
