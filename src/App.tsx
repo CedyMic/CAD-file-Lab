@@ -230,7 +230,7 @@ function SketchCreator({ model, disabled, onChange, onBuild, onCancel, initialSt
   const [planeAngle, setPlaneAngle] = useState(0)
   const [planeAngleAxis, setPlaneAngleAxis] = useState<'horizontal' | 'vertical'>('horizontal')
   const [creatingPlane, setCreatingPlane] = useState(false)
-  const [tool, setTool] = useState<'select' | 'line' | 'rectangle' | 'circle' | 'centerline' | 'arc' | 'dimension'>('line')
+  const [tool, setTool] = useState<'select' | 'line' | 'rectangle' | 'circle' | 'centerline' | 'arc' | 'dimension'>('rectangle')
   const [drag, setDrag] = useState<{ start: [number, number]; end: [number, number] } | null>(null)
   const [linePoints, setLinePoints] = useState<Array<[number, number]>>([])
   const [arcPoints, setArcPoints] = useState<Array<[number, number]>>([])
@@ -281,11 +281,12 @@ function SketchCreator({ model, disabled, onChange, onBuild, onCancel, initialSt
     window.addEventListener('keydown', editSketch)
     return () => window.removeEventListener('keydown', editSketch)
   }, [sketchState.selectedEntityIds, stage])
-  const startSketch = () => {
+  const startSketch = (selectedPlane = plane) => {
     const next: SketchExtrudeFeature = {
-      id: `feature-${crypto.randomUUID()}`, type: 'sketchExtrude', name: 'Boss-Extrude1', plane, planeOffset, planeAngle, planeAngleAxis,
+      id: `feature-${crypto.randomUUID()}`, type: 'sketchExtrude', name: 'Boss-Extrude1', plane: selectedPlane, planeOffset, planeAngle, planeAngleAxis,
       profile: { type: 'rectangle', width: 60, height: 40 }, operation: 'boss', length: 10, reversed: false,
     }
+    setPlane(selectedPlane)
     onChange({ version: 1, features: [next] })
     setDrag(null)
     setLinePoints([])
@@ -305,6 +306,7 @@ function SketchCreator({ model, disabled, onChange, onBuild, onCancel, initialSt
   const finish = (end: [number, number]) => {
     if (!drag) return
     const dx = Math.abs(end[0] - drag.start[0]); const dy = Math.abs(end[1] - drag.start[1])
+    if (dx < 1 || dy < 1) { setDrag(null); return }
     replaceFeature({ ...feature, plane, profile: tool === 'rectangle'
       ? { type: 'rectangle', width: Math.max(1, Math.round(dx)), height: Math.max(1, Math.round(dy)) }
       : { type: 'circle', radius: Math.max(0.5, Math.round(Math.hypot(dx, dy) * 10) / 10) } })
@@ -317,10 +319,10 @@ function SketchCreator({ model, disabled, onChange, onBuild, onCancel, initialSt
   }
   if (stage === 'plane') return <section className="sketch-workflow plane-stage">
     <span className="panel-label">Select sketch plane</span>
-    <p>Choose a plane, then draw the first sketch with the mouse.</p>
+    <p>Choose a reference plane to enter the sketch directly. The 3D workspace remains behind the selection.</p>
     <div className="plane-picker">
       {([['XY', 'Top'], ['XZ', 'Front'], ['YZ', 'Right']] as const).map(([value, label]) =>
-        <button className={plane === value ? 'selected' : ''} type="button" key={value} onClick={() => setPlane(value)}><span>{value}</span><strong>{label} plane</strong></button>)}
+        <button type="button" key={value} onClick={() => startSketch(value)}><span>{value}</span><strong>{label} plane</strong></button>)}
     </div>
     <button type="button" onClick={() => setCreatingPlane((current) => !current)}>＋ New offset plane</button>
     {creatingPlane && <fieldset className="reference-plane-editor">
@@ -331,11 +333,11 @@ function SketchCreator({ model, disabled, onChange, onBuild, onCancel, initialSt
       <label><span>Rotation axis</span><select value={planeAngleAxis} onChange={(event) => setPlaneAngleAxis(event.target.value as 'horizontal' | 'vertical')}><option value="horizontal">Horizontal sketch axis</option><option value="vertical">Vertical sketch axis</option></select></label>
       <small>Use a negative value to offset in the opposite direction.</small>
     </fieldset>}
-    <div className="sketch-actions"><button type="button" onClick={onCancel}>Cancel</button><button className="primary-button" type="button" onClick={startSketch}>Start sketch</button></div>
+    <div className="sketch-actions"><button type="button" onClick={onCancel}>Cancel</button>{creatingPlane && <button className="primary-button" type="button" onClick={() => startSketch()}>Sketch on custom plane</button>}</div>
   </section>
   if (stage === 'sketch') {
     const origin: [number, number] = [canvasSize.width / 2, canvasSize.height / 2]
-    const preview = drag ?? { start: [origin[0] - 50, origin[1] - 35] as [number, number], end: tool === 'rectangle' ? [origin[0] + 50, origin[1] + 35] as [number, number] : [origin[0] + 10, origin[1] - 35] as [number, number] }
+    const preview = drag ?? { start: origin, end: origin }
     const dx = Math.abs(preview.end[0] - preview.start[0]); const dy = Math.abs(preview.end[1] - preview.start[1])
     const selectedSketchEntity = sketchState.document.entities.find((entity) => sketchState.selectedEntityIds.includes(entity.id))
     const arcPath = (center: [number, number], radius: number, startAngle: number, endAngle: number) => {
@@ -434,8 +436,8 @@ function SketchCreator({ model, disabled, onChange, onBuild, onCancel, initialSt
         {sketchState.document.entities.map((entity) => entity.type === 'circle' ? <circle key={entity.id} cx={entity.center[0]} cy={entity.center[1]} r={entity.radius} fill="none" className={`sketch-entity${sketchState.selectedEntityIds.includes(entity.id) ? ' selected' : ''}`} onPointerDown={(event) => { if (tool !== 'select' && tool !== 'dimension') return; event.stopPropagation(); dispatchSketch({ type: 'select', entityId: entity.id, additive: event.ctrlKey || event.metaKey || event.shiftKey }) }} /> : entity.type === 'arc' ? <path key={entity.id} d={arcPath(entity.center, entity.radius, entity.startAngle, entity.endAngle)} fill="none" className={`sketch-entity${sketchState.selectedEntityIds.includes(entity.id) ? ' selected' : ''}`} onPointerDown={(event) => { if (tool !== 'select' && tool !== 'dimension') return; event.stopPropagation(); dispatchSketch({ type: 'select', entityId: entity.id, additive: event.ctrlKey || event.metaKey || event.shiftKey }) }} /> : null)}
         {tool === 'arc' && arcPoints.length > 0 && <>{<circle cx={arcPoints[0][0]} cy={arcPoints[0][1]} r="4" fill="#d33" />}{arcPoints.length === 2 && <circle cx={arcPoints[0][0]} cy={arcPoints[0][1]} r={Math.hypot(arcPoints[1][0] - arcPoints[0][0], arcPoints[1][1] - arcPoints[0][1])} fill="none" stroke="#1595e6" strokeDasharray="5 3" />}</>}
         {linePoints.length > 0 && <>{linePoints.length > 1 && <polyline points={linePoints.map((item) => item.join(',')).join(' ')} fill="none" stroke="#0875c9" strokeWidth="2" />}{tool === 'line' && hoverPoint && <line x1={linePoints.at(-1)![0]} y1={linePoints.at(-1)![1]} x2={hoverPoint[0]} y2={hoverPoint[1]} stroke="#1595e6" strokeWidth="2" strokeDasharray="5 3" />}{linePoints.map((item, index) => <g key={`${item[0]}-${item[1]}-${index}`}><circle cx={item[0]} cy={item[1]} r="4.5" fill={index === 0 ? '#d33' : '#0875c9'} />{index > 0 && <text x={(item[0] + linePoints[index - 1][0]) / 2} y={(item[1] + linePoints[index - 1][1]) / 2 - 7} className="sketch-dimension">{Math.hypot(item[0] - linePoints[index - 1][0], item[1] - linePoints[index - 1][1]).toFixed(1)} mm</text>}</g>)}</>}
-        {tool === 'rectangle' && <rect x={Math.min(preview.start[0], preview.end[0])} y={Math.min(preview.start[1], preview.end[1])} width={dx} height={dy} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />}
-        {tool === 'circle' && <circle cx={preview.start[0]} cy={preview.start[1]} r={Math.hypot(dx, dy)} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />}
+        {tool === 'rectangle' && drag && <rect x={Math.min(preview.start[0], preview.end[0])} y={Math.min(preview.start[1], preview.end[1])} width={dx} height={dy} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />}
+        {tool === 'circle' && drag && <circle cx={preview.start[0]} cy={preview.start[1]} r={Math.hypot(dx, dy)} fill="rgba(20,120,210,.12)" stroke="#0875c9" strokeWidth="2" />}
         {tool === 'rectangle' && drag && <><text x={(preview.start[0] + preview.end[0]) / 2} y={Math.min(preview.start[1], preview.end[1]) - 5} className="sketch-dimension">{dx.toFixed(1)} mm</text><text x={Math.max(preview.start[0], preview.end[0]) + 5} y={(preview.start[1] + preview.end[1]) / 2} className="sketch-dimension">{dy.toFixed(1)} mm</text></>}
         {tool === 'circle' && drag && <text x={preview.start[0] + 6} y={preview.start[1] - 6} className="sketch-dimension">R {Math.hypot(dx, dy).toFixed(1)} mm</text>}
       </svg>
@@ -450,7 +452,7 @@ function SketchCreator({ model, disabled, onChange, onBuild, onCancel, initialSt
         {sketchState.document.constraints.some((constraint) => ('entityId' in constraint ? constraint.entityId === selectedSketchEntity.id : constraint.firstEntityId === selectedSketchEntity.id || constraint.secondEntityId === selectedSketchEntity.id)) && <div className="sketch-relation-list"><span>Existing relations</span>{sketchState.document.constraints.filter((constraint) => ('entityId' in constraint ? constraint.entityId === selectedSketchEntity.id : constraint.firstEntityId === selectedSketchEntity.id || constraint.secondEntityId === selectedSketchEntity.id)).map((constraint) => <strong key={constraint.id}>{constraint.type}</strong>)}</div>}
         <button type="button" onClick={() => dispatchSketch({ type: 'removeEntities', entityIds: [selectedSketchEntity.id] })}>Delete entity</button>
       </aside>}
-      <small>{tool === 'line' ? 'Click endpoints; align vertically or horizontally with nearby geometry. Click the first red point to close.' : 'Click and drag in the sketch. Dimensions are displayed on the sketch.'}</small>
+      <small>{tool === 'line' ? 'Click endpoints; align vertically or horizontally with nearby geometry. Click the first red point to close.' : sketchState.document.entities.length ? 'Select geometry to edit dimensions, or finish the sketch to extrude.' : 'Draw directly on the plane: click and drag to create a rectangle.'}</small>
       <button className="primary-button" type="button" disabled={!drag || (feature.profile.type !== 'polyline' && dx < 1 && dy < 1)} onClick={() => setStage('extrude')}>Exit sketch</button>
     </section>
   }
@@ -1781,13 +1783,13 @@ function App() {
             <button className={activeTool === 'modify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'modify'} disabled={!model?.editable} onClick={() => { setSelectedPartIds(new Set()); setModifySelectionMode('face'); setModifyFaceSelection(null); setModifyEdgeSelection(null); setModifyPreview(null); setModifyError(null); setActiveTool('modify') }} title="Directly edit exact CAD faces"><strong>Modify</strong><span>Move face</span></button>
             <button type="button" disabled={!model?.canUndo || isModifying} onClick={() => { void changeCadEdit('undo') }} title="Undo the last committed 3D direct edit"><strong>↶ Undo</strong><span>CAD edit</span></button>
             <button type="button" disabled={!model?.canRedo || isModifying} onClick={() => { void changeCadEdit('redo') }} title="Redo the last undone 3D direct edit"><strong>↷ Redo</strong><span>CAD edit</span></button>
-            <button className={activeTool === 'simplify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'simplify'} disabled={!model} onClick={() => { if (exportFormat === 'step' || exportFormat === 'brep') setExportFormat('stl'); setActiveTool('simplify') }}><strong>Simplify</strong><span>Reduce size</span></button>
           </div>
         </div>
 
         <div className="ribbon-group">
           <span className="ribbon-group-label">Output</span>
           <div>
+            <button className={activeTool === 'simplify' ? 'active' : ''} type="button" aria-pressed={activeTool === 'simplify'} disabled={!model} onClick={() => { if (exportFormat === 'step' || exportFormat === 'brep') setExportFormat('stl'); setActiveTool('simplify') }}><strong>Simplify</strong><span>Reduce mesh</span></button>
             <button className={activeTool === 'convert' ? 'active' : ''} type="button" aria-pressed={activeTool === 'convert'} disabled={!model} onClick={() => setActiveTool('convert')}><strong>Convert / Export</strong><span>Choose format</span></button>
           </div>
         </div>
@@ -2141,9 +2143,7 @@ function App() {
               )
             }}
           >
-            {activeTool === 'create' && createMode === 'features' && sketchEditor ? (
-              <SketchCreator key={sketchEditor} model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} onCancel={() => setSketchEditor(null)} initialStage={sketchEditor === 'edit' ? 'extrude' : 'plane'} />
-            ) : <CadViewport
+            <CadViewport
               model={displayedModel}
               settings={
                 displaySettings
@@ -2166,7 +2166,10 @@ function App() {
               onModifyFaceSelect={activeTool === 'modify' && modifySelectionMode === 'face' ? (selection) => { setModifyFaceSelection(selection); setModifyPreview(null); setModifyError(null) } : undefined}
               onModifyEdgeSelect={activeTool === 'modify' && modifySelectionMode === 'edge' ? (selection) => { setModifyEdgeSelection(selection); setModifyError(null) } : undefined}
               onClearSelection={() => { setSelectedPartIds(new Set()); setModifyFaceSelection(null); setModifyEdgeSelection(null); setModifyPreview(null); setModifyError(null) }}
-            />}
+            />
+            {activeTool === 'create' && createMode === 'features' && sketchEditor && (
+              <SketchCreator key={sketchEditor} model={featureModel} disabled={isCreatingPrimitive} onChange={setFeatureModel} onBuild={() => { void applyFeatureModel() }} onCancel={() => setSketchEditor(null)} initialStage={sketchEditor === 'edit' ? 'extrude' : 'plane'} />
+            )}
 
             {error && (
               <div className="viewport-error" role="alert">
